@@ -31,15 +31,16 @@ const hashPasswordSync = (password) => {
   return bcrypt.hashSync(password, 10);
 };
 
-// In-memory operator account
-memoryUsers.set('operator@vyraion.ai', {
-  id: 'usr_operator',
-  name: 'Operator Console',
-  email: 'operator@vyraion.ai',
-  password: hashPasswordSync('Dispatch@2026'),
-  role: 'operator',
-  createdAt: new Date()
-});
+// In-memory demo accounts
+memoryUsers.set('operator@vyraion.demo', { id: 'usr_operator', name: 'Operator Console', email: 'operator@vyraion.demo', password: hashPasswordSync('demo123'), role: 'operator', createdAt: new Date() });
+memoryUsers.set('admin@vyraion.demo', { id: 'usr_admin', name: 'System Admin', email: 'admin@vyraion.demo', password: hashPasswordSync('demo123'), role: 'admin', createdAt: new Date() });
+memoryUsers.set('police@vyraion.demo', { id: 'usr_police', name: 'Police Command', email: 'police@vyraion.demo', password: hashPasswordSync('demo123'), role: 'authority', createdAt: new Date() });
+memoryUsers.set('hospital@vyraion.demo', { id: 'usr_hospital', name: 'Hospital Ops', email: 'hospital@vyraion.demo', password: hashPasswordSync('demo123'), role: 'hospital', createdAt: new Date() });
+memoryUsers.set('investigator@vyraion.demo', { id: 'usr_investigator', name: 'Investigator', email: 'investigator@vyraion.demo', password: hashPasswordSync('demo123'), role: 'investigator', createdAt: new Date() });
+memoryUsers.set('reviewer@vyraion.demo', { id: 'usr_reviewer', name: 'Reviewer', email: 'reviewer@vyraion.demo', password: hashPasswordSync('demo123'), role: 'reviewer', createdAt: new Date() });
+memoryUsers.set('user@vyraion.demo', { id: 'usr_user', name: 'Public User', email: 'user@vyraion.demo', password: hashPasswordSync('demo123'), role: 'user', createdAt: new Date() });
+// Keep legacy operator
+memoryUsers.set('operator@vyraion.ai', { id: 'usr_operator_legacy', name: 'Operator Console', email: 'operator@vyraion.ai', password: hashPasswordSync('Dispatch@2026'), role: 'operator', createdAt: new Date() });
 
 /* ═══════════════════════════════════════════════════════════
    ROLE POLICY (Single Source of Truth)
@@ -51,7 +52,16 @@ memoryUsers.set('operator@vyraion.ai', {
    never trusted — it is always overwritten at login time.
 ═══════════════════════════════════════════════════════════ */
 const resolveRole = (email) => {
-  return email.toLowerCase().trim() === 'operator@vyraion.ai' ? 'operator' : 'admin';
+  if (!email) return 'admin';
+  const cleanEmail = email.toLowerCase().trim();
+  if (cleanEmail === 'operator@vyraion.ai' || cleanEmail === 'operator@vyraion.demo') return 'operator';
+  if (cleanEmail === 'admin@vyraion.demo') return 'admin';
+  if (cleanEmail === 'police@vyraion.demo') return 'authority';
+  if (cleanEmail === 'hospital@vyraion.demo') return 'hospital';
+  if (cleanEmail === 'investigator@vyraion.demo') return 'investigator';
+  if (cleanEmail === 'reviewer@vyraion.demo') return 'reviewer';
+  if (cleanEmail === 'user@vyraion.demo') return 'user';
+  return 'admin';
 };
 
 /* ═══════════════════════════════════════════════════════════
@@ -63,18 +73,7 @@ const runRoleMigration = async () => {
   if (migrationDone) return;
   try {
     if (mongoose.connection.readyState === 1) {
-      // Fix all non-operator accounts that have wrong role
-      const result = await User.updateMany(
-        {
-          email: { $ne: 'operator@vyraion.ai' },
-          role: { $ne: 'admin' }
-        },
-        { $set: { role: 'admin' } }
-      );
-      if (result.modifiedCount > 0) {
-        logger.warn(`[Auth Migration] Corrected role to "admin" for ${result.modifiedCount} user(s).`);
-      }
-
+      // Removed aggressive role overriding to 'admin'
       // Ensure operator@vyraion.ai record has role = operator
       await User.updateMany(
         { email: 'operator@vyraion.ai' },
@@ -190,7 +189,8 @@ router.post('/login', authLimiter, async (req, res) => {
 
     // ── OPERATOR PATH ────────────────────────────────────────────────────────
     if (assignedRole === 'operator') {
-      if (password !== 'Dispatch@2026') {
+      const isValidOpPassword = (cleanEmail === 'operator@vyraion.demo' && password === 'demo123') || (cleanEmail === 'operator@vyraion.ai' && password === 'Dispatch@2026');
+      if (!isValidOpPassword) {
         logger.warn(`[Auth Login FAILURE] Invalid password for operator: ${cleanEmail}`);
         return res.status(401).json({ success: false, message: 'Invalid email or password.' });
       }
@@ -229,7 +229,7 @@ router.post('/login', authLimiter, async (req, res) => {
       });
     }
 
-    // ── ADMIN PATH ───────────────────────────────────────────────────────────
+    // ── GENERAL PATH ───────────────────────────────────────────────────────────
     if (isMongoConnected) {
       let user = await User.findOne({
         $or: [{ email: cleanEmail }, { username: cleanEmail }]
@@ -237,20 +237,20 @@ router.post('/login', authLimiter, async (req, res) => {
 
       if (!user) {
         // First-time login — auto-register
-        logger.info(`[Auth Login] Auto-registering new admin: ${cleanEmail}`);
+        logger.info(`[Auth Login] Auto-registering new user: ${cleanEmail}`);
         user = await User.create({
           name: cleanEmail.split('@')[0],
           email: cleanEmail,
           username: cleanEmail.split('@')[0],
           password: password,
-          role: 'admin'
+          role: assignedRole
         });
       }
 
       // Always enforce correct role from email policy
-      if (user.role !== 'admin') {
-        logger.warn(`[Auth Login] Correcting stale role for ${cleanEmail}: "${user.role}" → "admin"`);
-        user.role = 'admin';
+      if (user.role !== assignedRole) {
+        logger.warn(`[Auth Login] Correcting stale role for ${cleanEmail}: "${user.role}" → "${assignedRole}"`);
+        user.role = assignedRole;
         await user.save();
       }
 
@@ -262,12 +262,12 @@ router.post('/login', authLimiter, async (req, res) => {
       user.lastLoginAt = new Date();
       await user.save();
 
-      const token = generateToken(user._id.toString(), user.email, user.name, 'admin');
-      logger.info(`[Auth Login] Admin authenticated: ${cleanEmail} (${user._id})`);
+      const token = generateToken(user._id.toString(), user.email, user.name, assignedRole);
+      logger.info(`[Auth Login] User authenticated: ${cleanEmail} (${user._id})`);
 
       return res.json({
         success: true, message: 'Sign in successful!', token,
-        user: { id: user._id.toString(), name: user.name, email: user.email, role: 'admin' }
+        user: { id: user._id.toString(), name: user.name, email: user.email, role: assignedRole }
       });
     }
 

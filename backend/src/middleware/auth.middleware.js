@@ -2,10 +2,17 @@ import jwt from 'jsonwebtoken';
 import { config } from '../config/env.js';
 import { logger } from '../utils/logger.js';
 
-// Single source of truth role resolution helper
 const resolveRole = (email) => {
   if (!email) return 'admin';
-  return email.toLowerCase().trim() === 'operator@vyraion.ai' ? 'operator' : 'admin';
+  const cleanEmail = email.toLowerCase().trim();
+  if (cleanEmail === 'operator@vyraion.ai' || cleanEmail === 'operator@vyraion.demo') return 'operator';
+  if (cleanEmail === 'admin@vyraion.demo') return 'admin';
+  if (cleanEmail === 'police@vyraion.demo') return 'authority';
+  if (cleanEmail === 'hospital@vyraion.demo') return 'hospital';
+  if (cleanEmail === 'investigator@vyraion.demo') return 'investigator';
+  if (cleanEmail === 'reviewer@vyraion.demo') return 'reviewer';
+  if (cleanEmail === 'user@vyraion.demo') return 'user';
+  return 'admin';
 };
 
 export const protect = (req, res, next) => {

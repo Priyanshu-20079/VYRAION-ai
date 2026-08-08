@@ -104,8 +104,7 @@ export const randomIncidentLocation = (type = 'traffic', lastLoc = lastGenerated
 export const DISPATCH_UNITS = {
   traffic: [
     { type: 'ambulance', name: 'ALS Ambulance', icon: '🚑', category: 'hospital' },
-    { type: 'police', name: 'Police Car', icon: '🚔', category: 'police' },
-    { type: 'tow', name: 'Tow Truck', icon: '🛻', category: 'infrastructure' }
+    { type: 'police', name: 'Police Car', icon: '🚔', category: 'police' }
   ],
   fire: [
     { type: 'fire', name: 'Fire Engine', icon: '🚒', category: 'fire' },
@@ -117,9 +116,9 @@ export const DISPATCH_UNITS = {
     { type: 'medical_unit', name: 'Medical Response Unit', icon: '🩺', category: 'hospital' }
   ],
   hospital: [
-    { type: 'utility', name: 'Utility Repair', icon: '⚡', category: 'infrastructure' },
-    { type: 'tech', name: 'Technical Team', icon: '🛠️', category: 'infrastructure' },
-    { type: 'ambulance_standby', name: 'Ambulance Standby', icon: '🚑', category: 'hospital' }
+    { type: 'ambulance', name: 'ALS Ambulance', icon: '🚑', category: 'hospital' },
+    { type: 'medical_unit', name: 'Medical Response Unit', icon: '🩺', category: 'hospital' },
+    { type: 'police', name: 'Police Coordination', icon: '🚔', category: 'police' }
   ],
   safety: [
     { type: 'police', name: 'Police Patrol', icon: '🚔', category: 'police' },
@@ -132,10 +131,11 @@ export const DISPATCH_UNITS = {
   ],
   power: [
     { type: 'utility', name: 'Power Utility Team', icon: '⚡', category: 'infrastructure' },
-    { type: 'generator', name: 'Mobile Power Generator', icon: '🔋', category: 'infrastructure' }
+    { type: 'generator', name: 'Grid Substation Crew', icon: '⚡', category: 'infrastructure' }
   ],
   rain: [
-    { type: 'pump', name: 'Drainage Pump Unit', icon: '🚧', category: 'infrastructure' }
+    { type: 'rescue', name: 'Rescue Unit', icon: '🚤', category: 'police' },
+    { type: 'ambulance', name: 'Ambulance', icon: '🚑', category: 'hospital' }
   ]
 };
 

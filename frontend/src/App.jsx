@@ -12,6 +12,8 @@ import KnowledgePage from './pages/KnowledgePage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage';
 import OperatorConsolePage from './pages/OperatorConsolePage';
+import HospitalDashboardPage from './pages/HospitalDashboardPage';
+import AuthorityDashboardPage from './pages/AuthorityDashboardPage';
 
 export default function App() {
   return (
@@ -41,8 +43,22 @@ export default function App() {
             </Route>
           </Route>
 
+          {/* Hospital Dashboard Route */}
+          <Route element={<ProtectedRoute allowedRole="hospital" />}>
+            <Route element={<AppLayout />}>
+              <Route path="/hospital" element={<HospitalDashboardPage />} />
+            </Route>
+          </Route>
+
+          {/* Authority Dashboard Route */}
+          <Route element={<ProtectedRoute allowedRole="authority" />}>
+            <Route element={<AppLayout />}>
+              <Route path="/authority" element={<AuthorityDashboardPage />} />
+            </Route>
+          </Route>
+
           {/* Catch-all fallback redirect */}
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

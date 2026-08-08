@@ -55,14 +55,14 @@ const incidentSchema = new mongoose.Schema({
   action: { type: String },
   checklist: {
     type: mongoose.Schema.Types.Mixed,
-    default: {
+    default: () => ({
       incidentVerified: false,
       teamNotified:     false,
       unitsDispatched:  false,
       unitsArrived:     false,
       hospitalNotified: false,
       incidentResolved: false
-    }
+    })
   }
 }, {
   timestamps: true

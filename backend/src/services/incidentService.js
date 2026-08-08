@@ -312,6 +312,8 @@ class IncidentService {
         await Incident.findOneAndUpdate({ id: uniqueId }, newInc, { upsert: true, new: true });
       }
     } catch (e) {
+      console.error(`[DEBUG IncidentService DB Error] FULL ERROR for ${uniqueId}:`, e);
+      if (e.errors) console.error(`[DEBUG IncidentService DB Error] ValidationError details:`, e.errors);
       logger.error(`[IncidentService DB Error] Failed to upsert triggered incident '${uniqueId}':`, e.message);
     }
 

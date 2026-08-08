@@ -15,14 +15,22 @@ import {
 /* ═══════════════════════════════════════════════════════════
    USER DATA
 ═══════════════════════════════════════════════════════════ */
-const USER = {
-  name: 'Priyanshu',
-  fullName: 'Priyanshu Tiwari',
-  initials: 'PT',
-  role: 'Lead Operations Engineer',
-  org: 'Vyraion City Command',
-  shift: 'Alpha Shift • 18:00 – 06:00',
-  lastLogin: 'Today, 17:42 IST',
+const getDynamicUser = (authUser, viewRole) => {
+  const baseName = authUser?.name || 'Operator';
+  const roleDisplay = viewRole === 'authority' ? 'Police Command'
+    : viewRole === 'hospital' ? 'Hospital Ops'
+    : viewRole === 'operator' ? 'Lead Operations Engineer'
+    : 'System Administrator';
+
+  return {
+    name: baseName,
+    fullName: authUser?.email ? baseName : 'Priyanshu Tiwari',
+    initials: baseName.substring(0, 2).toUpperCase(),
+    role: roleDisplay,
+    org: 'Vyraion City Command',
+    shift: 'Alpha Shift • 18:00 – 06:00',
+    lastLogin: 'Session Active',
+  };
 };
 
 /* ═══════════════════════════════════════════════════════════
@@ -546,6 +554,8 @@ export default function Header() {
   const [showProfile, setShowProfile] = useState(false);
   const [activeModal, setActiveModal] = useState(null);
 
+  const USER = getDynamicUser(authUser, viewRole);
+
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const profileRef = useRef(null);
@@ -618,23 +628,25 @@ export default function Header() {
 
           <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span>🟢 Administrator</span>
+            <span className="capitalize">{viewRole || authUser?.role}</span>
           </div>
 
-          <div className="hidden sm:inline-flex relative items-center">
-            <select
-              value={viewRole}
-              onChange={(e) => setViewRole(e.target.value)}
-              className="appearance-none outline-none cursor-pointer bg-[#33C8FF]/10 text-[#33C8FF] border border-[#33C8FF]/30 hover:bg-[#33C8FF]/20 px-3 py-1 pr-6 rounded-full text-xs font-semibold transition-colors"
-            >
-              <option value="operator">View: Operator</option>
-              <option value="authority">View: Authority</option>
-              <option value="hospital">View: Hospital</option>
-              <option value="investigator">View: Investigator</option>
-              <option value="reviewer">View: Reviewer</option>
-            </select>
-            <ChevronDown className="w-3 h-3 text-[#33C8FF] absolute right-2 pointer-events-none" />
-          </div>
+          {authUser?.role === 'admin' && (
+            <div className="hidden sm:inline-flex relative items-center">
+              <select
+                value={viewRole}
+                onChange={(e) => setViewRole(e.target.value)}
+                className="appearance-none outline-none cursor-pointer bg-[#33C8FF]/10 text-[#33C8FF] border border-[#33C8FF]/30 hover:bg-[#33C8FF]/20 px-3 py-1 pr-6 rounded-full text-xs font-semibold transition-colors"
+              >
+                <option value="operator">View: Operator</option>
+                <option value="authority">View: Authority</option>
+                <option value="hospital">View: Hospital</option>
+                <option value="investigator">View: Investigator</option>
+                <option value="reviewer">View: Reviewer</option>
+              </select>
+              <ChevronDown className="w-3 h-3 text-[#33C8FF] absolute right-2 pointer-events-none" />
+            </div>
+          )}
 
 
           <div className="hidden sm:inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border"

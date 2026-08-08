@@ -34,6 +34,10 @@ export default function LoginPage() {
       const res = await login(email, password);
       if (res && res.user && res.user.role === 'operator') {
         navigate('/operator', { replace: true });
+      } else if (res && res.user && res.user.role === 'authority') {
+        navigate('/authority', { replace: true });
+      } else if (res && res.user && res.user.role === 'hospital') {
+        navigate('/hospital', { replace: true });
       } else {
         const destination = location.state?.from?.pathname || '/dashboard';
         navigate(destination, { replace: true });
@@ -95,6 +99,25 @@ export default function LoginPage() {
             <span>{errorMessage}</span>
           </div>
         )}
+
+        {/* Demo Accounts */}
+        <div className="mb-6 space-y-2">
+          <p className="text-[10px] uppercase tracking-widest text-slate-500 font-semibold text-center">Demo Accounts</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => { setEmail('hospital@vyraion.demo'); setPassword('demo123'); }} className="py-2 px-3 bg-slate-900/50 hover:bg-slate-800 border border-slate-700/50 hover:border-slate-600 rounded-xl text-xs text-slate-300 transition-colors cursor-pointer text-left flex items-center justify-between group">
+              <span>Hospital</span><ChevronRight className="w-3 h-3 text-slate-600 group-hover:text-slate-400" />
+            </button>
+            <button type="button" onClick={() => { setEmail('police@vyraion.demo'); setPassword('demo123'); }} className="py-2 px-3 bg-slate-900/50 hover:bg-slate-800 border border-slate-700/50 hover:border-slate-600 rounded-xl text-xs text-slate-300 transition-colors cursor-pointer text-left flex items-center justify-between group">
+              <span>Police / Authority</span><ChevronRight className="w-3 h-3 text-slate-600 group-hover:text-slate-400" />
+            </button>
+            <button type="button" onClick={() => { setEmail('operator@vyraion.demo'); setPassword('demo123'); }} className="py-2 px-3 bg-slate-900/50 hover:bg-slate-800 border border-slate-700/50 hover:border-slate-600 rounded-xl text-xs text-slate-300 transition-colors cursor-pointer text-left flex items-center justify-between group">
+              <span>Operator</span><ChevronRight className="w-3 h-3 text-slate-600 group-hover:text-slate-400" />
+            </button>
+            <button type="button" onClick={() => { setEmail('admin@vyraion.demo'); setPassword('demo123'); }} className="py-2 px-3 bg-slate-900/50 hover:bg-slate-800 border border-slate-700/50 hover:border-slate-600 rounded-xl text-xs text-slate-300 transition-colors cursor-pointer text-left flex items-center justify-between group">
+              <span>Admin</span><ChevronRight className="w-3 h-3 text-slate-600 group-hover:text-slate-400" />
+            </button>
+          </div>
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Email Field */}

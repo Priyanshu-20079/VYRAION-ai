@@ -5,6 +5,16 @@ const ViewRoleContext = createContext();
 export function ViewRoleProvider({ children }) {
   const [viewRole, setViewRole] = useState(() => {
     if (typeof window !== 'undefined') {
+      try {
+        const userStr = localStorage.getItem('vyraion_user_data');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          if (user && user.role && user.role !== 'admin') {
+            return user.role;
+          }
+        }
+      } catch (e) {}
+      
       const stored = localStorage.getItem('vyraion_view_role');
       if (['operator', 'authority', 'hospital', 'investigator', 'reviewer'].includes(stored)) {
         return stored;

@@ -13,13 +13,21 @@ const DEMO_KEY = 'vyraion_demo_mode';
 // Used client-side to detect and flush stale cached tokens.
 const resolveExpectedRole = (email) => {
   if (!email) return 'admin';
-  return email.toLowerCase().trim() === 'operator@vyraion.ai' ? 'operator' : 'admin';
+  const cleanEmail = email.toLowerCase().trim();
+  if (cleanEmail === 'operator@vyraion.ai' || cleanEmail === 'operator@vyraion.demo') return 'operator';
+  if (cleanEmail === 'admin@vyraion.demo') return 'admin';
+  if (cleanEmail === 'police@vyraion.demo') return 'authority';
+  if (cleanEmail === 'hospital@vyraion.demo') return 'hospital';
+  if (cleanEmail === 'investigator@vyraion.demo') return 'investigator';
+  if (cleanEmail === 'reviewer@vyraion.demo') return 'reviewer';
+  if (cleanEmail === 'user@vyraion.demo') return 'user';
+  return 'admin';
 };
 
 // ── TOKEN VERSION BUST ────────────────────────────────────────────────────────
 // Increment this whenever the auth schema changes. Any cached token from a
 // previous version is immediately flushed so users re-authenticate fresh.
-const AUTH_VERSION = '3';
+const AUTH_VERSION = '4';
 const AUTH_VERSION_KEY = 'vyraion_auth_version';
 
 const clearAllAuthStorage = () => {

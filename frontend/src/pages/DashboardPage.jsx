@@ -57,6 +57,7 @@ export default function DashboardPage() {
   const [modelUsed, setModelUsed] = useState('');
   const [isLoadingBlueprint, setIsLoadingBlueprint] = useState(false);
   const [isTriggering, setIsTriggering] = useState({});
+  const [triggerError, setTriggerError] = useState({});
   const [liveVehicles, setLiveVehicles] = useState([]);
   const liveVehiclesRef = useRef([]);
   const [incidentAnimState, setIncidentAnimState] = useState({});
@@ -459,8 +460,10 @@ export default function DashboardPage() {
     setCurrentProgress(0);
     setCompletedAgents([]);
 
+    console.log('[DEBUG UI] dynamicInc:', dynamicInc);
     try {
-      await fetch(`${INCIDENTS_API_URL}`, {
+      setTriggerError((prev) => ({ ...prev, [type]: false }));
+      const res = await fetch(`${INCIDENTS_API_URL}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -473,8 +476,18 @@ export default function DashboardPage() {
           dispatchedUnits: dynamicInc.dispatchedUnits
         })
       });
+      const data = await res.json();
+      console.log(`[DEBUG POST /api/incidents] UI fetch response: status=${res.status}, body=`, data);
+      
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || `Server returned ${res.status}`);
+      }
+      
+      setIsTriggering((prev) => ({ ...prev, [type]: false }));
+      clearTimeout(fallbackTimer);
     } catch (e) {
       console.error('Trigger incident error:', e);
+      setTriggerError((prev) => ({ ...prev, [type]: true }));
       setIsTriggering((prev) => ({ ...prev, [type]: false }));
       clearTimeout(fallbackTimer);
     }
@@ -1336,6 +1349,7 @@ export default function DashboardPage() {
               {Object.keys(masterIncidents).map((key) => {
                 const isActive = activeQueue.some((i) => (i.id === key || i.type === key) && i.status !== 'RESOLVED' && i.status !== 'ARCHIVED');
                 const triggering = isTriggering[key];
+                const hasError = triggerError[key];
                 return (
                   <button
                     key={key}
@@ -1345,6 +1359,8 @@ export default function DashboardPage() {
                     className={`p-2.5 rounded-xl border text-xs font-semibold transition-all duration-200 flex items-center justify-between gap-1.5 cursor-pointer active:scale-[0.98] ${
                       isActive
                         ? 'bg-[#EF4444]/20 text-[#EF4444] border-[#EF4444]/60 shadow-lg shadow-[#EF4444]/20 animate-pulse cursor-not-allowed'
+                        : hasError
+                        ? 'bg-red-500/20 text-red-500 border-red-500/60 shadow-lg shadow-red-500/20'
                         : triggering
                         ? 'bg-amber-500/20 text-amber-300 border-amber-500/60 cursor-wait'
                         : 'bg-slate-900/90 hover:bg-slate-800 text-slate-200 border-slate-800 hover:border-[#EF4444]/40'
