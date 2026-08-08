@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import DashboardPage from './DashboardPage';
+import PoliceFireDashboardPage from './PoliceFireDashboardPage';
 import { useViewRole } from '../context/ViewRoleContext';
 
 export default function AuthorityDashboardPage() {
@@ -11,5 +11,5 @@ export default function AuthorityDashboardPage() {
     }
   }, [viewRole, setViewRole]);
 
-  return <DashboardPage />;
+  return <PoliceFireDashboardPage />;
 }

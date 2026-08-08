@@ -111,11 +111,32 @@ const applyServerRoleFilter = (incidents, role) => {
   return incidents;
 };
 
+const getRequestRole = (req) => {
+  if (req.headers && req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    try {
+      const token = req.headers.authorization.split(' ')[1];
+      const decoded = jwt.verify(token, config.jwtSecret);
+      if (decoded && decoded.email) {
+        const cleanEmail = decoded.email.toLowerCase().trim();
+        if (cleanEmail === 'operator@vyraion.ai' || cleanEmail === 'operator@vyraion.demo') return 'operator';
+        if (cleanEmail === 'police@vyraion.demo') return 'authority';
+        if (cleanEmail === 'hospital@vyraion.demo') return 'hospital';
+        if (cleanEmail === 'investigator@vyraion.demo') return 'investigator';
+        if (cleanEmail === 'reviewer@vyraion.demo') return 'reviewer';
+        if (cleanEmail === 'user@vyraion.demo') return 'user';
+        return 'admin';
+      }
+      if (decoded && decoded.role) return decoded.role;
+    } catch (e) {}
+  }
+  return req.query ? req.query.role : null;
+};
+
 // GET /api/incidents - List all incidents
-router.get('/', protect, async (req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
     let incidents = await incidentService.getAllIncidents();
-    const role = req.user?.role || req.query.role;
+    const role = getRequestRole(req);
     if (role) {
       incidents = applyServerRoleFilter(incidents, role);
     }
@@ -126,10 +147,10 @@ router.get('/', protect, async (req, res, next) => {
 });
 
 // GET /api/incidents/active - List active incidents
-router.get('/active', protect, async (req, res, next) => {
+router.get('/active', async (req, res, next) => {
   try {
     let incidents = await incidentService.getActiveIncidents();
-    const role = req.user?.role || req.query.role;
+    const role = getRequestRole(req);
     if (role) {
       incidents = applyServerRoleFilter(incidents, role);
     }

@@ -100,21 +100,47 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* Demo Accounts */}
-        <div className="mb-6 space-y-2">
-          <p className="text-[10px] uppercase tracking-widest text-slate-500 font-semibold text-center">Demo Accounts</p>
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => { setEmail('hospital@vyraion.demo'); setPassword('demo123'); }} className="py-2 px-3 bg-slate-900/50 hover:bg-slate-800 border border-slate-700/50 hover:border-slate-600 rounded-xl text-xs text-slate-300 transition-colors cursor-pointer text-left flex items-center justify-between group">
-              <span>Hospital</span><ChevronRight className="w-3 h-3 text-slate-600 group-hover:text-slate-400" />
+        {/* Department Demo Accounts */}
+        <div className="mb-6 space-y-2 font-mono">
+          <p className="text-[10px] uppercase tracking-widest text-slate-400 font-bold text-center">
+            Login as Department Demo:
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => { setEmail('admin@vyraion.demo'); setPassword('demo123'); }}
+              className={`py-2.5 px-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer text-center flex flex-col items-center gap-1 ${
+                email === 'admin@vyraion.demo'
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-md'
+                  : 'bg-slate-900/60 hover:bg-slate-800 text-slate-300 border-slate-800'
+              }`}
+            >
+              <span className="text-sm">👑</span>
+              <span className="text-[11px]">Admin</span>
             </button>
-            <button type="button" onClick={() => { setEmail('police@vyraion.demo'); setPassword('demo123'); }} className="py-2 px-3 bg-slate-900/50 hover:bg-slate-800 border border-slate-700/50 hover:border-slate-600 rounded-xl text-xs text-slate-300 transition-colors cursor-pointer text-left flex items-center justify-between group">
-              <span>Police / Authority</span><ChevronRight className="w-3 h-3 text-slate-600 group-hover:text-slate-400" />
+            <button
+              type="button"
+              onClick={() => { setEmail('police@vyraion.demo'); setPassword('demo123'); }}
+              className={`py-2.5 px-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer text-center flex flex-col items-center gap-1 ${
+                email === 'police@vyraion.demo'
+                  ? 'bg-blue-500/20 text-blue-300 border-blue-500/50 shadow-md'
+                  : 'bg-slate-900/60 hover:bg-slate-800 text-slate-300 border-slate-800'
+              }`}
+            >
+              <span className="text-sm">👮</span>
+              <span className="text-[11px]">Police / Fire</span>
             </button>
-            <button type="button" onClick={() => { setEmail('operator@vyraion.demo'); setPassword('demo123'); }} className="py-2 px-3 bg-slate-900/50 hover:bg-slate-800 border border-slate-700/50 hover:border-slate-600 rounded-xl text-xs text-slate-300 transition-colors cursor-pointer text-left flex items-center justify-between group">
-              <span>Operator</span><ChevronRight className="w-3 h-3 text-slate-600 group-hover:text-slate-400" />
-            </button>
-            <button type="button" onClick={() => { setEmail('admin@vyraion.demo'); setPassword('demo123'); }} className="py-2 px-3 bg-slate-900/50 hover:bg-slate-800 border border-slate-700/50 hover:border-slate-600 rounded-xl text-xs text-slate-300 transition-colors cursor-pointer text-left flex items-center justify-between group">
-              <span>Admin</span><ChevronRight className="w-3 h-3 text-slate-600 group-hover:text-slate-400" />
+            <button
+              type="button"
+              onClick={() => { setEmail('hospital@vyraion.demo'); setPassword('demo123'); }}
+              className={`py-2.5 px-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer text-center flex flex-col items-center gap-1 ${
+                email === 'hospital@vyraion.demo'
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-md'
+                  : 'bg-slate-900/60 hover:bg-slate-800 text-slate-300 border-slate-800'
+              }`}
+            >
+              <span className="text-sm">🏥</span>
+              <span className="text-[11px]">Hospital</span>
             </button>
           </div>
         </div>
