@@ -191,92 +191,91 @@ export default function DashboardPage() {
   const latestIncidentDef = latestIncident ? masterIncidents[latestIncident.id] : null;
 
   // ─── BACKEND REAL-TIME WEBSOCKET STATE SYNC ENGINE ───────────────────────
-  useEffect(() => {
-    const fetchBackendIncidents = async () => {
-      try {
-        const endpoint = ['investigator', 'reviewer', 'operator'].includes(viewRole)
-          ? `${INCIDENTS_API_URL}?role=${viewRole}`
-          : `${INCIDENTS_API_URL}/active?role=${viewRole}`;
-        const res = await fetch(endpoint);
-        if (res.ok) {
-          const result = await res.json();
-          if (result.success && Array.isArray(result.data)) {
-            let backendQueue = result.data;
-            backendQueue = filterIncidentsForRole(backendQueue, viewRole);
-            backendQueue = applySubFilter(backendQueue, viewRole, selectedTab);
-            
-            backendQueue = backendQueue.map((inc) => {
-              let masterKey = 'traffic';
-              const rawId = String(inc.type || inc.name || inc.id || '').toLowerCase();
-              if (rawId.includes('fire')) masterKey = 'fire';
-              else if (rawId.includes('medical')) masterKey = 'medical';
-              else if (rawId.includes('power')) masterKey = 'power';
-              else if (rawId.includes('hospital')) masterKey = 'hospital';
-              else if (rawId.includes('hazmat')) masterKey = 'hazmat';
-              else if (rawId.includes('safety')) masterKey = 'safety';
-              else if (rawId.includes('rain')) masterKey = 'rain';
+  const fetchBackendIncidents = useCallback(async () => {
+    try {
+      const endpoint = ['investigator'].includes(viewRole) 
+        ? `${INCIDENTS_API_URL}?role=${viewRole}` 
+        : `${INCIDENTS_API_URL}/active?role=${viewRole}`;
+      const res = await fetch(endpoint);
+      if (res.ok) {
+        const result = await res.json();
+        if (result.success && Array.isArray(result.data)) {
+          let backendQueue = result.data;
+          backendQueue = applySubFilter(backendQueue, viewRole, selectedTab);
+          
+          backendQueue = backendQueue.map((inc) => {
+            let masterKey = 'traffic';
+            const rawId = String(inc.type || inc.name || inc.id || '').toLowerCase();
+            if (rawId.includes('fire')) masterKey = 'fire';
+            else if (rawId.includes('medical')) masterKey = 'medical';
+            else if (rawId.includes('power')) masterKey = 'power';
+            else if (rawId.includes('hospital')) masterKey = 'hospital';
+            else if (rawId.includes('hazmat')) masterKey = 'hazmat';
+            else if (rawId.includes('safety')) masterKey = 'safety';
+            else if (rawId.includes('rain')) masterKey = 'rain';
 
-              const masterDef = masterIncidents[inc.id] || masterIncidents[masterKey] || MASTER_INCIDENTS.traffic;
+            const masterDef = masterIncidents[inc.id] || masterIncidents[masterKey] || MASTER_INCIDENTS.traffic;
 
-              // Fallback route synthesis if dispatchedUnits is missing or routeless
-              let dispatchedUnits = inc.dispatchedUnits;
-              if (!dispatchedUnits || !Array.isArray(dispatchedUnits) || dispatchedUnits.length === 0 || !dispatchedUnits[0].route) {
-                const incLat = inc.lat || masterDef.lat;
-                const incLng = inc.lng || masterDef.lng;
-                const responders = findNearestResponders(incLat, incLng);
-                const unitSpecs = DISPATCH_UNITS[masterKey] || DISPATCH_UNITS.traffic;
-                dispatchedUnits = unitSpecs.map((u, idx) => {
-                  let station = responders.police;
-                  if (u.category === 'hospital') station = responders.hospital;
-                  else if (u.category === 'fire') station = responders.fire;
-                  else if (u.category === 'infrastructure') station = CITY_FACILITIES.find(f => f.category === 'infrastructure') || responders.police;
-                  const route = buildRoadNetworkRoute(station.lat, station.lng, incLat, incLng);
-                  return { unitId: `unit_${masterKey}_${idx}_${Date.now()}`, name: u.name, type: u.type, icon: u.icon, category: u.category, stationName: station.name, originLat: station.lat, originLng: station.lng, route };
-                });
-              }
-
-              return {
-                ...masterDef,
-                ...inc,
-                id: inc.id || inc.uniqueId,
-                uniqueId: inc.uniqueId || inc.id,
-                status: inc.status || 'AWAITING_APPROVAL',
-                phase: inc.phase || 3,
-                lat: inc.lat || masterDef.lat,
-                lng: inc.lng || masterDef.lng,
-                hotspot: inc.hotspot || masterDef.hotspot || 'Expressway Corridor',
-                dispatchedUnits,
-                checklist: inc.checklist || {},
-                vehicleIcon: masterDef.vehicleIcon || '🚑',
-                vehicleName: masterDef.vehicleName || 'ALS Ambulance',
-                timeDetected: inc.timeDetected || new Date(inc.detectedAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-              };
-            });
-
-            setActiveQueue(backendQueue);
-            setIsTriggering((prev) => {
-              const next = { ...prev };
-              backendQueue.forEach((inc) => {
-                const k = inc.id && inc.id.includes('_') ? inc.id.split('_')[0] : inc.id;
-                delete next[k];
-                delete next[inc.type];
+            // Fallback route synthesis if dispatchedUnits is missing or routeless
+            let dispatchedUnits = inc.dispatchedUnits;
+            if (!dispatchedUnits || !Array.isArray(dispatchedUnits) || dispatchedUnits.length === 0 || !dispatchedUnits[0].route) {
+              const incLat = inc.lat || masterDef.lat;
+              const incLng = inc.lng || masterDef.lng;
+              const responders = findNearestResponders(incLat, incLng);
+              const unitSpecs = DISPATCH_UNITS[masterKey] || DISPATCH_UNITS.traffic;
+              dispatchedUnits = unitSpecs.map((u, idx) => {
+                let station = responders.police;
+                if (u.category === 'hospital') station = responders.hospital;
+                else if (u.category === 'fire') station = responders.fire;
+                else if (u.category === 'infrastructure') station = CITY_FACILITIES.find(f => f.category === 'infrastructure') || responders.police;
+                const route = buildRoadNetworkRoute(station.lat, station.lng, incLat, incLng);
+                return { unitId: `unit_${masterKey}_${idx}_${Date.now()}`, name: u.name, type: u.type, icon: u.icon, category: u.category, stationName: station.name, originLat: station.lat, originLng: station.lng, route };
               });
-              return next;
-            });
-
-            if (backendQueue.length > 0) {
-              const maxPhase = Math.max(...result.data.map((inc) => inc.phase || 1));
-              setCurrentPhase(maxPhase);
-            } else {
-              setCurrentPhase(0);
             }
+
+            return {
+              ...masterDef,
+              ...inc,
+              id: inc.id || inc.uniqueId,
+              uniqueId: inc.uniqueId || inc.id,
+              status: inc.status || 'AWAITING_APPROVAL',
+              phase: inc.phase || 3,
+              lat: inc.lat || masterDef.lat,
+              lng: inc.lng || masterDef.lng,
+              hotspot: inc.hotspot || masterDef.hotspot || 'Expressway Corridor',
+              dispatchedUnits,
+              checklist: inc.checklist || {},
+              vehicleIcon: masterDef.vehicleIcon || '🚑',
+              vehicleName: masterDef.vehicleName || 'ALS Ambulance',
+              timeDetected: inc.timeDetected || new Date(inc.detectedAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+            };
+          });
+
+          setActiveQueue(backendQueue);
+          setIsTriggering((prev) => {
+            const next = { ...prev };
+            backendQueue.forEach((inc) => {
+              const k = inc.id && inc.id.includes('_') ? inc.id.split('_')[0] : inc.id;
+              delete next[k];
+              delete next[inc.type];
+            });
+            return next;
+          });
+
+          if (backendQueue.length > 0) {
+            const maxPhase = Math.max(...result.data.map((inc) => inc.phase || 1));
+            setCurrentPhase(maxPhase);
+          } else {
+            setCurrentPhase(0);
           }
         }
-      } catch (err) {
-        // Offline fallback
       }
-    };
+    } catch (err) {
+      // Offline fallback
+    }
+  }, [viewRole, selectedTab]);
 
+  useEffect(() => {
     fetchBackendIncidents();
 
     if (socket && isConnected) {
@@ -366,7 +365,7 @@ export default function DashboardPage() {
       const pollInterval = setInterval(fetchBackendIncidents, 5000);
       return () => clearInterval(pollInterval);
     }
-  }, [socket, isConnected, viewRole, selectedTab]);
+  }, [socket, isConnected, viewRole, selectedTab, fetchBackendIncidents]);
 
   // ─── OPERATOR ONLINE STATUS MONITORING ───────────────────────────────────
   useEffect(() => {
@@ -460,7 +459,7 @@ export default function DashboardPage() {
     setCompletedAgents([]);
 
     try {
-      await fetch(`${INCIDENTS_API_URL}`, {
+      const res = await fetch(`${INCIDENTS_API_URL}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -473,8 +472,12 @@ export default function DashboardPage() {
           dispatchedUnits: dynamicInc.dispatchedUnits
         })
       });
+      if (res.ok) {
+        await fetchBackendIncidents();
+      }
     } catch (e) {
       console.error('Trigger incident error:', e);
+    } finally {
       setIsTriggering((prev) => ({ ...prev, [type]: false }));
       clearTimeout(fallbackTimer);
     }
@@ -1334,7 +1337,12 @@ export default function DashboardPage() {
 
             <div className="grid grid-cols-2 gap-2">
               {Object.keys(masterIncidents).map((key) => {
-                const isActive = activeQueue.some((i) => (i.id === key || i.type === key) && i.status !== 'RESOLVED' && i.status !== 'ARCHIVED');
+                const isActive = activeQueue.some((i) => {
+                  const incId = String(i.id || i.uniqueId || '').toLowerCase();
+                  const incType = String(i.type || i.name || '').toLowerCase();
+                  const targetKey = String(key).toLowerCase();
+                  return (incId === targetKey || incId.startsWith(`${targetKey}_`) || incType.includes(targetKey)) && i.status !== 'RESOLVED' && i.status !== 'REJECTED' && i.status !== 'ARCHIVED';
+                });
                 const triggering = isTriggering[key];
                 return (
                   <button

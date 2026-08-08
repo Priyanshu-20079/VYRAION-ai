@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   Database,
   BarChart3,
+  FileSpreadsheet,
   Activity
 } from 'lucide-react';
 
@@ -17,6 +18,13 @@ export default function Sidebar() {
       icon: LayoutDashboard,
       badge: 'Live',
       badgeColor: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+    },
+    {
+      name: 'Dataset Generator',
+      path: '/dataset',
+      icon: FileSpreadsheet,
+      badge: 'Atlas',
+      badgeColor: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30'
     },
     {
       name: 'Knowledge Base',
