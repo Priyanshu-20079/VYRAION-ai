@@ -6,11 +6,11 @@ export function ViewRoleProvider({ children }) {
   const [viewRole, setViewRole] = useState(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('vyraion_view_role');
-      if (['operator', 'authority', 'hospital', 'investigator', 'reviewer'].includes(stored)) {
+      if (['authority', 'hospital', 'investigator', 'reviewer'].includes(stored)) {
         return stored;
       }
     }
-    return 'operator';
+    return 'authority';
   });
 
   useEffect(() => {

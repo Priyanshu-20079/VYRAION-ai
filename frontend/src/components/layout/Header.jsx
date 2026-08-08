@@ -627,7 +627,6 @@ export default function Header() {
               onChange={(e) => setViewRole(e.target.value)}
               className="appearance-none outline-none cursor-pointer bg-[#33C8FF]/10 text-[#33C8FF] border border-[#33C8FF]/30 hover:bg-[#33C8FF]/20 px-3 py-1 pr-6 rounded-full text-xs font-semibold transition-colors"
             >
-              <option value="operator">View: Operator</option>
               <option value="authority">View: Authority</option>
               <option value="hospital">View: Hospital</option>
               <option value="investigator">View: Investigator</option>
