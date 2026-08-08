@@ -52,7 +52,18 @@ const incidentSchema = new mongoose.Schema({
   vehicleIcon: { type: String },
   vehicleName: { type: String },
   destination: { type: String },
-  action: { type: String }
+  action: { type: String },
+  checklist: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {
+      incidentVerified: false,
+      teamNotified:     false,
+      unitsDispatched:  false,
+      unitsArrived:     false,
+      hospitalNotified: false,
+      incidentResolved: false
+    }
+  }
 }, {
   timestamps: true
 });

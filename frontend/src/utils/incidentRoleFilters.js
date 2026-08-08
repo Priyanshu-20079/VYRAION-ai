@@ -69,26 +69,28 @@ export function getFilterTabsForRole(viewRole) {
 }
 
 export function applySubFilter(incidents, viewRole, tabId) {
-  if (tabId === 'all') return incidents;
-
   if (viewRole === 'operator') {
     if (tabId === 'pending') return incidents.filter(i => i.status === 'AWAITING_APPROVAL');
     if (tabId === 'resolved') return incidents.filter(i => i.status === 'RESOLVED');
-    if (tabId === 'all') return incidents.filter(i => i.status === 'AWAITING_APPROVAL' || i.status === 'APPROVED');
+    // 'all' (Assigned/Active) falls through to this narrowing filter:
+    return incidents.filter(i => i.status === 'AWAITING_APPROVAL' || i.status === 'APPROVED');
   }
 
   if (viewRole === 'authority') {
     if (tabId === 'critical') return incidents.filter(i => i.severity === 'CRITICAL' || i.severity === 'HIGH');
+    return incidents;
   }
 
   if (viewRole === 'hospital') {
-    // For demo purposes, we will return all filtered hospital incidents for 'medical' and 'assigned'
-    if (tabId === 'medical' || tabId === 'assigned' || tabId === 'nearby') return incidents;
+    // medical/assigned/nearby currently share the same result set
+    return incidents;
   }
 
   if (viewRole === 'reviewer') {
     if (tabId === 'with-ai') return incidents.filter(i => i.priorities && i.priorities.length > 0);
+    return incidents;
   }
 
+  // investigator and any other role/tabId combination
   return incidents;
 }

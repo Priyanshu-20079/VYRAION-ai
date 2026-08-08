@@ -3,13 +3,24 @@
  * Right slide-in context drawer (width 0→340px) showing entity details.
  * Tabs: Overview / Units / Timeline / Predictions
  */
-import React, { useState, useEffect } from 'react';
-import { X, MapPin, Clock, Zap, Users, BarChart2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { X, MapPin, Clock, Zap, Users, BarChart2, AlertTriangle, CheckCircle2, ClipboardList } from 'lucide-react';
 import { MASTER_INCIDENTS } from '../../../data/incidents';
 import { getRealSingaporeLocation } from '../../common/SingaporeSatelliteMap';
 import { STATUS_COLORS } from '../../../utils/statusColors';
+import { INCIDENTS_API_URL } from '../../../config/api';
 
-const TABS = ['Overview', 'Units', 'Timeline', 'Predictions'];
+const TABS = ['Overview', 'Checklist', 'Units', 'Timeline', 'Predictions'];
+
+const CHECKLIST_LABELS = {
+  incidentVerified: 'Incident Verified',
+  teamNotified:     'Response Team Notified',
+  unitsDispatched:  'Units Dispatched',
+  unitsArrived:     'Units Arrived On Scene',
+  hospitalNotified: 'Hospital / Medical Notified',
+  incidentResolved: 'Incident Resolved',
+};
+const CHECKLIST_KEYS = Object.keys(CHECKLIST_LABELS);
 
 function formatElapsed(createdAt) {
   if (!createdAt) return '—';
@@ -29,6 +40,8 @@ export default function IncidentContextDrawer({
 }) {
   const [activeTab, setActiveTab] = useState('Overview');
   const [elapsed, setElapsed] = useState('00:00');
+  // Optimistic local checklist state — keyed by incident id
+  const [localChecklist, setLocalChecklist] = useState({});
 
   const isOpen = !!selectedEntity;
   const inc = selectedEntity?.type === 'incident'
@@ -38,8 +51,13 @@ export default function IncidentContextDrawer({
   const incDef = inc ? (MASTER_INCIDENTS[inc.id] || inc) : null;
   const locInfo = inc ? getRealSingaporeLocation(inc.lat || 1.3323, inc.lng || 103.8580) : null;
 
-  // Reset tab when selection changes
-  useEffect(() => { setActiveTab('Overview'); }, [selectedEntity?.id]);
+  // Reset tab and local checklist when selection changes
+  useEffect(() => { setActiveTab('Overview'); setLocalChecklist({}); }, [selectedEntity?.id]);
+
+  // Sync local checklist whenever the incident's checklist from activeQueue changes
+  useEffect(() => {
+    if (inc?.checklist) setLocalChecklist(inc.checklist);
+  }, [inc?.checklist]);
 
   // Elapsed timer
   useEffect(() => {
@@ -58,6 +76,34 @@ export default function IncidentContextDrawer({
 
   const hasPredictions = !!(incDef?.priorities?.length);
   const tabs = TABS.filter((t) => t !== 'Predictions' || hasPredictions);
+
+  // Merged checklist — local (optimistic) overrides remote
+  const mergedChecklist = CHECKLIST_KEYS.reduce((acc, k) => {
+    const remoteVal = inc?.checklist?.[k] ?? false;
+    acc[k] = localChecklist[k] !== undefined ? localChecklist[k] : remoteVal;
+    return acc;
+  }, {});
+  const checkedCount = CHECKLIST_KEYS.filter((k) => mergedChecklist[k]).length;
+  const checklistPct = Math.round((checkedCount / CHECKLIST_KEYS.length) * 100);
+
+  const incId = inc?.uniqueId || inc?.id || selectedEntity?.id;
+
+  const handleChecklistToggle = useCallback(async (key) => {
+    const newVal = !mergedChecklist[key];
+    // Optimistic update
+    setLocalChecklist((prev) => ({ ...prev, [key]: newVal }));
+    try {
+      await fetch(`${INCIDENTS_API_URL}/${incId}/checklist`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [key]: newVal }),
+      });
+      // Socket 'incident:phase-changed' will reconcile server state automatically
+    } catch (_) {
+      // Rollback optimistic update on network error
+      setLocalChecklist((prev) => ({ ...prev, [key]: !newVal }));
+    }
+  }, [mergedChecklist, incId]);
 
   // Vehicles assigned to this incident
   const assignedVehicles = vehiclesStateRef?.current?.filter(
@@ -201,6 +247,97 @@ export default function IncidentContextDrawer({
               >
                 📍 Fly to Incident
               </button>
+            </div>
+          )}
+
+          {/* ── CHECKLIST ─────────────────────────────────────────────────── */}
+          {activeTab === 'Checklist' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {/* Progress summary */}
+              <div style={{
+                padding: '8px 10px', borderRadius: 8,
+                background: checklistPct === 100 ? 'rgba(16,185,129,0.1)' : 'rgba(51,200,255,0.07)',
+                border: `1px solid ${checklistPct === 100 ? 'rgba(16,185,129,0.35)' : 'rgba(51,200,255,0.2)'}`,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ fontSize: 9, color: '#64748B', fontFamily: 'monospace', fontWeight: 700 }}>MISSION CHECKLIST</span>
+                  <span style={{
+                    fontSize: 9, fontFamily: 'monospace', fontWeight: 800,
+                    color: checklistPct === 100 ? '#10B981' : '#33C8FF',
+                  }}>{checkedCount} / {CHECKLIST_KEYS.length} — {checklistPct}%</span>
+                </div>
+                {/* Progress bar */}
+                <div style={{ height: 4, background: 'rgba(255,255,255,0.07)', borderRadius: 2, overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${checklistPct}%`,
+                    background: checklistPct === 100
+                      ? 'linear-gradient(90deg,#10B981,#34D399)'
+                      : 'linear-gradient(90deg,#1FA2FF,#33C8FF)',
+                    borderRadius: 2,
+                    transition: 'width 0.4s ease',
+                  }} />
+                </div>
+              </div>
+
+              {/* Checklist rows */}
+              {CHECKLIST_KEYS.map((key) => {
+                const checked = mergedChecklist[key];
+                const label = CHECKLIST_LABELS[key];
+                const isAuto = key === 'incidentVerified' || key === 'teamNotified' || key === 'unitsDispatched' || key === 'incidentResolved';
+                return (
+                  <div
+                    key={key}
+                    onClick={() => !isAuto && handleChecklistToggle(key)}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '7px 10px', borderRadius: 8,
+                      background: checked ? 'rgba(16,185,129,0.07)' : 'rgba(255,255,255,0.03)',
+                      border: `1px solid ${checked ? 'rgba(16,185,129,0.25)' : 'rgba(255,255,255,0.07)'}`,
+                      cursor: isAuto ? 'default' : 'pointer',
+                      transition: 'all 0.2s ease',
+                      gap: 8,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, flex: 1, minWidth: 0 }}>
+                      {/* Toggle pill */}
+                      <div style={{
+                        width: 28, height: 15, borderRadius: 8, flexShrink: 0,
+                        background: checked ? '#10B981' : 'rgba(255,255,255,0.1)',
+                        border: `1px solid ${checked ? '#10B981' : 'rgba(255,255,255,0.15)'}`,
+                        position: 'relative',
+                        transition: 'background 0.2s, border-color 0.2s',
+                        opacity: isAuto ? 0.6 : 1,
+                      }}>
+                        <div style={{
+                          width: 9, height: 9, borderRadius: '50%',
+                          background: '#fff',
+                          position: 'absolute',
+                          top: 2,
+                          left: checked ? 15 : 2,
+                          transition: 'left 0.2s ease',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
+                        }} />
+                      </div>
+                      <span style={{ fontSize: 10, color: checked ? '#E2E8F0' : '#94A3B8', fontFamily: 'monospace', fontWeight: checked ? 700 : 400, lineHeight: 1.3 }}>
+                        {label}
+                      </span>
+                    </div>
+                    {isAuto && (
+                      <span style={{ fontSize: 8, color: '#475569', fontFamily: 'monospace', flexShrink: 0, marginLeft: 4 }}>AUTO</span>
+                    )}
+                    {checked && (
+                      <CheckCircle2 size={12} color="#10B981" style={{ flexShrink: 0 }} />
+                    )}
+                  </div>
+                );
+              })}
+
+              {!inc && (
+                <div style={{ fontSize: 10, color: '#64748B', fontFamily: 'monospace', textAlign: 'center', padding: '20px 0' }}>
+                  Select an active incident to manage its checklist.
+                </div>
+              )}
             </div>
           )}
 

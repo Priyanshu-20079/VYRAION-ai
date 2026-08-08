@@ -63,7 +63,8 @@ export default function DashboardPage() {
 
   // Reset tab when viewRole changes
   useEffect(() => {
-    setSelectedTab('all');
+    const tabs = getFilterTabsForRole(viewRole);
+    setSelectedTab(tabs[0]?.id || 'all');
   }, [viewRole]);
 
   // UI Navigation State
@@ -193,8 +194,8 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchBackendIncidents = async () => {
       try {
-        const endpoint = ['investigator', 'reviewer'].includes(viewRole) 
-          ? `${INCIDENTS_API_URL}?role=${viewRole}` 
+        const endpoint = ['investigator', 'reviewer', 'operator'].includes(viewRole)
+          ? `${INCIDENTS_API_URL}?role=${viewRole}`
           : `${INCIDENTS_API_URL}/active?role=${viewRole}`;
         const res = await fetch(endpoint);
         if (res.ok) {
