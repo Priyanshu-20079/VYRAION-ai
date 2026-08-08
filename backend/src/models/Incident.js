@@ -24,21 +24,8 @@ const incidentSchema = new mongoose.Schema({
     realTime: String
   }],
   resolutionTime: { type: String },
-  fieldResponse: [{
-    unit: String,
-    eta: String,
-    icon: String
-  }],
-  dispatchedUnits: [{
-    unitId: String,
-    name: String,
-    type: String,
-    icon: String,
-    stationName: String,
-    originLat: Number,
-    originLng: Number,
-    route: [[Number]]
-  }],
+  fieldResponse: { type: mongoose.Schema.Types.Mixed },
+  dispatchedUnits: { type: mongoose.Schema.Types.Mixed },
   priorities: [{
     title: String,
     reason: String,

@@ -35,14 +35,15 @@ import { STATUS_COLORS } from '../utils/statusColors';
 import { useNotifications } from '../context/NotificationContext';
 import { useSocket } from '../context/SocketContext';
 import { useViewRole } from '../context/ViewRoleContext';
-import { filterIncidentsForRole, getFilterTabsForRole, applySubFilter } from '../utils/incidentRoleFilters';
+import { filterIncidentsForRole, getFilterTabsForRole, applySubFilter, ROLE_LABELS, ROLE_DESCRIPTIONS } from '../utils/incidentRoleFilters';
 
 export default function DashboardPage() {
   const { emitEventNotification } = useNotifications();
   const { socket, isConnected } = useSocket();
-  const { viewRole } = useViewRole();
+  const { viewRole, setIncidentCounts } = useViewRole();
   const emittedStageEventsRef = useRef(new Set());
   const [activeQueue, setActiveQueue] = useState([]);
+  const [allRawIncidents, setAllRawIncidents] = useState([]);
   const [novaBlueprint, setNovaBlueprint] = useState([]);
   const [aiError, setAiError] = useState(null);
   const [disableLiveAI, setDisableLiveAI] = useState(() => {
@@ -192,92 +193,96 @@ export default function DashboardPage() {
   const latestIncidentDef = latestIncident ? masterIncidents[latestIncident.id] : null;
 
   // ─── BACKEND REAL-TIME WEBSOCKET STATE SYNC ENGINE ───────────────────────
-  useEffect(() => {
-    const fetchBackendIncidents = async () => {
-      try {
-        const endpoint = ['investigator', 'reviewer', 'operator'].includes(viewRole)
-          ? `${INCIDENTS_API_URL}?role=${viewRole}`
-          : `${INCIDENTS_API_URL}/active?role=${viewRole}`;
-        const res = await fetch(endpoint);
-        if (res.ok) {
-          const result = await res.json();
-          if (result.success && Array.isArray(result.data)) {
-            let backendQueue = result.data;
-            backendQueue = filterIncidentsForRole(backendQueue, viewRole);
-            backendQueue = applySubFilter(backendQueue, viewRole, selectedTab);
-            
-            backendQueue = backendQueue.map((inc) => {
-              let masterKey = 'traffic';
-              const rawId = String(inc.type || inc.name || inc.id || '').toLowerCase();
-              if (rawId.includes('fire')) masterKey = 'fire';
-              else if (rawId.includes('medical')) masterKey = 'medical';
-              else if (rawId.includes('power')) masterKey = 'power';
-              else if (rawId.includes('hospital')) masterKey = 'hospital';
-              else if (rawId.includes('hazmat')) masterKey = 'hazmat';
-              else if (rawId.includes('safety')) masterKey = 'safety';
-              else if (rawId.includes('rain')) masterKey = 'rain';
+  const fetchBackendIncidents = useCallback(async () => {
+    try {
+      const endpoint = viewRole === 'investigator' 
+        ? `${INCIDENTS_API_URL}?role=all` 
+        : `${INCIDENTS_API_URL}/active?role=all`;
+      const res = await fetch(endpoint);
+      if (res.ok) {
+        const result = await res.json();
+        if (result.success && Array.isArray(result.data)) {
+          const allRaw = result.data;
+          setAllRawIncidents(allRaw);
 
-              const masterDef = masterIncidents[inc.id] || masterIncidents[masterKey] || MASTER_INCIDENTS.traffic;
+          const roleScoped = filterIncidentsForRole(allRaw, viewRole);
+          setIncidentCounts({ visible: roleScoped.length, total: allRaw.length });
 
-              // Fallback route synthesis if dispatchedUnits is missing or routeless
-              let dispatchedUnits = inc.dispatchedUnits;
-              if (!dispatchedUnits || !Array.isArray(dispatchedUnits) || dispatchedUnits.length === 0 || !dispatchedUnits[0].route) {
-                const incLat = inc.lat || masterDef.lat;
-                const incLng = inc.lng || masterDef.lng;
-                const responders = findNearestResponders(incLat, incLng);
-                const unitSpecs = DISPATCH_UNITS[masterKey] || DISPATCH_UNITS.traffic;
-                dispatchedUnits = unitSpecs.map((u, idx) => {
-                  let station = responders.police;
-                  if (u.category === 'hospital') station = responders.hospital;
-                  else if (u.category === 'fire') station = responders.fire;
-                  else if (u.category === 'infrastructure') station = CITY_FACILITIES.find(f => f.category === 'infrastructure') || responders.police;
-                  const route = buildRoadNetworkRoute(station.lat, station.lng, incLat, incLng);
-                  return { unitId: `unit_${masterKey}_${idx}_${Date.now()}`, name: u.name, type: u.type, icon: u.icon, category: u.category, stationName: station.name, originLat: station.lat, originLng: station.lng, route };
-                });
-              }
+          const tabScoped = applySubFilter(roleScoped, viewRole, selectedTab);
+          
+          const backendQueue = tabScoped.map((inc) => {
+            let masterKey = 'traffic';
+            const rawId = String(inc.type || inc.name || inc.id || '').toLowerCase();
+            if (rawId.includes('fire')) masterKey = 'fire';
+            else if (rawId.includes('medical')) masterKey = 'medical';
+            else if (rawId.includes('power')) masterKey = 'power';
+            else if (rawId.includes('hospital')) masterKey = 'hospital';
+            else if (rawId.includes('hazmat')) masterKey = 'hazmat';
+            else if (rawId.includes('safety')) masterKey = 'safety';
+            else if (rawId.includes('rain')) masterKey = 'rain';
 
-              return {
-                ...masterDef,
-                ...inc,
-                id: inc.id || inc.uniqueId,
-                uniqueId: inc.uniqueId || inc.id,
-                status: inc.status || 'AWAITING_APPROVAL',
-                phase: inc.phase || 3,
-                lat: inc.lat || masterDef.lat,
-                lng: inc.lng || masterDef.lng,
-                hotspot: inc.hotspot || masterDef.hotspot || 'Expressway Corridor',
-                dispatchedUnits,
-                checklist: inc.checklist || {},
-                vehicleIcon: masterDef.vehicleIcon || '🚑',
-                vehicleName: masterDef.vehicleName || 'ALS Ambulance',
-                timeDetected: inc.timeDetected || new Date(inc.detectedAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-              };
-            });
+            const masterDef = masterIncidents[inc.id] || masterIncidents[masterKey] || MASTER_INCIDENTS.traffic;
 
-            setActiveQueue(backendQueue);
-            setIsTriggering((prev) => {
-              const next = { ...prev };
-              backendQueue.forEach((inc) => {
-                const k = inc.id && inc.id.includes('_') ? inc.id.split('_')[0] : inc.id;
-                delete next[k];
-                delete next[inc.type];
+            // Fallback route synthesis if dispatchedUnits is missing or routeless
+            let dispatchedUnits = inc.dispatchedUnits;
+            if (!dispatchedUnits || !Array.isArray(dispatchedUnits) || dispatchedUnits.length === 0 || !dispatchedUnits[0].route) {
+              const incLat = inc.lat || masterDef.lat;
+              const incLng = inc.lng || masterDef.lng;
+              const responders = findNearestResponders(incLat, incLng);
+              const unitSpecs = DISPATCH_UNITS[masterKey] || DISPATCH_UNITS.traffic;
+              dispatchedUnits = unitSpecs.map((u, idx) => {
+                let station = responders.police;
+                if (u.category === 'hospital') station = responders.hospital;
+                else if (u.category === 'fire') station = responders.fire;
+                else if (u.category === 'infrastructure') station = CITY_FACILITIES.find(f => f.category === 'infrastructure') || responders.police;
+                const route = buildRoadNetworkRoute(station.lat, station.lng, incLat, incLng);
+                return { unitId: `unit_${masterKey}_${idx}_${Date.now()}`, name: u.name, type: u.type, icon: u.icon, category: u.category, stationName: station.name, originLat: station.lat, originLng: station.lng, route };
               });
-              return next;
-            });
-
-            if (backendQueue.length > 0) {
-              const maxPhase = Math.max(...result.data.map((inc) => inc.phase || 1));
-              setCurrentPhase(maxPhase);
-            } else {
-              setCurrentPhase(0);
             }
+
+            return {
+              ...masterDef,
+              ...inc,
+              id: inc.id || inc.uniqueId,
+              uniqueId: inc.uniqueId || inc.id,
+              status: inc.status || 'AWAITING_APPROVAL',
+              phase: inc.phase || 3,
+              lat: inc.lat || masterDef.lat,
+              lng: inc.lng || masterDef.lng,
+              hotspot: inc.hotspot || masterDef.hotspot || 'Expressway Corridor',
+              dispatchedUnits,
+              checklist: inc.checklist || {},
+              vehicleIcon: masterDef.vehicleIcon || '🚑',
+              vehicleName: masterDef.vehicleName || 'ALS Ambulance',
+              timeDetected: inc.timeDetected || new Date(inc.detectedAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+            };
+          });
+
+          setActiveQueue(backendQueue);
+          setIsTriggering((prev) => {
+            const next = { ...prev };
+            backendQueue.forEach((inc) => {
+              const k = inc.id && inc.id.includes('_') ? inc.id.split('_')[0] : inc.id;
+              delete next[k];
+              delete next[inc.type];
+            });
+            return next;
+          });
+
+          if (backendQueue.length > 0) {
+            const maxPhase = Math.max(...backendQueue.map((inc) => inc.phase || 1));
+            setCurrentPhase(maxPhase);
+          } else {
+            setCurrentPhase(0);
           }
         }
-      } catch (err) {
-        // Offline fallback
       }
-    };
+    } catch (err) {
+      // Offline fallback
+    }
+  }, [viewRole, selectedTab, setIncidentCounts]);
 
+  useEffect(() => {
     fetchBackendIncidents();
 
     if (socket && isConnected) {
@@ -367,7 +372,7 @@ export default function DashboardPage() {
       const pollInterval = setInterval(fetchBackendIncidents, 5000);
       return () => clearInterval(pollInterval);
     }
-  }, [socket, isConnected, viewRole, selectedTab]);
+  }, [socket, isConnected, viewRole, selectedTab, fetchBackendIncidents]);
 
   // ─── OPERATOR ONLINE STATUS MONITORING ───────────────────────────────────
   useEffect(() => {
@@ -477,17 +482,28 @@ export default function DashboardPage() {
         })
       });
       const data = await res.json();
-      console.log(`[DEBUG POST /api/incidents] UI fetch response: status=${res.status}, body=`, data);
-      
-      if (!res.ok || !data.success) {
+      if (res.ok && data.success && data.data) {
+        const createdDoc = {
+          ...dynamicInc,
+          ...data.data,
+          id: data.data.uniqueId || data.data.id || dynamicInc.uniqueId,
+          uniqueId: data.data.uniqueId || data.data.id || dynamicInc.uniqueId,
+          status: data.data.status || 'AWAITING_APPROVAL',
+          phase: data.data.phase || 3
+        };
+        setActiveQueue((prev) => {
+          const exists = prev.some((i) => (i.uniqueId || i.id) === createdDoc.uniqueId);
+          if (exists) return prev;
+          return [...prev, createdDoc];
+        });
+        await fetchBackendIncidents();
+      } else {
         throw new Error(data.message || `Server returned ${res.status}`);
       }
-      
-      setIsTriggering((prev) => ({ ...prev, [type]: false }));
-      clearTimeout(fallbackTimer);
     } catch (e) {
       console.error('Trigger incident error:', e);
       setTriggerError((prev) => ({ ...prev, [type]: true }));
+    } finally {
       setIsTriggering((prev) => ({ ...prev, [type]: false }));
       clearTimeout(fallbackTimer);
     }
@@ -714,10 +730,11 @@ export default function DashboardPage() {
     });
   }, [activeQueue, liveVehicles, emitEventNotification]);
 
-  // ─── DISPATCH LIFECYCLE EVENTS (arrival, resolution) ───────────────────────
+  // ─── DISPATCH LIFECYCLE EVENTS (arrival, medical notification, resolution) ───
   useEffect(() => {
-    if (liveVehicles.length === 0) return;
+    if (liveVehicles.length === 0 || activeQueue.length === 0) return;
 
+    // Per-vehicle log & notification broadcasts
     liveVehicles.forEach((v) => {
       if (v.state === 'IDLE' || !v.incidentId) return;
 
@@ -738,36 +755,6 @@ export default function DashboardPage() {
           type: 'info',
           expiry: '15min'
         });
-
-        // Auto-set checklist.unitsArrived = true via API (first unit to arrive triggers this)
-        const arrivedChecklistKey = `${v.incidentId}_checklist_unitsArrived`;
-        if (!emittedStageEventsRef.current.has(arrivedChecklistKey)) {
-          emittedStageEventsRef.current.add(arrivedChecklistKey);
-          fetch(`${INCIDENTS_API_URL}/${v.incidentId}/checklist`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ unitsArrived: true }),
-          }).then(res => res.ok && res.json()).then(data => {
-            if (data?.data?.checklist) {
-              setActiveQueue(prev => prev.map(inc => {
-                const id = inc.uniqueId || inc.instanceId || inc.id;
-                if (id === v.incidentId || inc.id === v.incidentId) {
-                  return { ...inc, checklist: { ...inc.checklist, ...data.data.checklist } };
-                }
-                return inc;
-              }));
-            }
-          }).catch(() => {
-            // If API call fails, patch local state anyway for UX consistency
-            setActiveQueue(prev => prev.map(inc => {
-              const id = inc.uniqueId || inc.instanceId || inc.id;
-              if (id === v.incidentId || inc.id === v.incidentId) {
-                return { ...inc, checklist: { ...(inc.checklist || {}), unitsArrived: true } };
-              }
-              return inc;
-            }));
-          });
-        }
       }
 
       // Unit returning to base
@@ -777,7 +764,113 @@ export default function DashboardPage() {
         addLog(`🏠 ${v.name} returning to base`, 'green', 'dispatch');
       }
     });
-  }, [liveVehicles, emitEventNotification]);
+
+    // Per-incident multi-unit arrival & hospital/medical notification evaluation
+    activeQueue.forEach((inc) => {
+      const incId = inc.uniqueId || inc.instanceId || inc.id;
+      if (!incId) return;
+
+      // Find all live response units assigned to this specific incident
+      const incVehicles = liveVehicles.filter(
+        (v) => (v.incidentId === incId || v.assignedUnitId?.startsWith(incId)) && v.state !== 'IDLE'
+      );
+
+      if (incVehicles.length === 0) return;
+
+      // 1. HOSPITAL / MEDICAL NOTIFIED AUTOMATIC EVALUATION
+      // Hospital / Medical Notified represents that medical response coordination has actually occurred
+      // when an assigned medical/ambulance unit is confirmed actively responding/on-scene.
+      const hasMedicalUnit = incVehicles.some(
+        (v) =>
+          v.category === 'hospital' ||
+          String(v.icon || '').includes('🚑') ||
+          String(v.name || '').toLowerCase().includes('ambulance') ||
+          String(v.type || '').toLowerCase().includes('medical')
+      );
+
+      const isMedicalInc =
+        hasMedicalUnit ||
+        String(inc.type || inc.name || inc.id || '').toLowerCase().match(/medical|hospital|traffic|fire|hazmat|casualty/i);
+
+      if (isMedicalInc && hasMedicalUnit) {
+        const medicalUnitOnScene = incVehicles.some(
+          (v) =>
+            (v.category === 'hospital' || String(v.icon || '').includes('🚑') || String(v.name || '').toLowerCase().includes('ambulance')) &&
+            (v.state === 'ON_SCENE' || v.state === 'RETURNING')
+        );
+
+        const hospitalNotifiedKey = `${incId}_checklist_hospitalNotified`;
+        if (medicalUnitOnScene && !inc.checklist?.hospitalNotified && !emittedStageEventsRef.current.has(hospitalNotifiedKey)) {
+          emittedStageEventsRef.current.add(hospitalNotifiedKey);
+          addLog(`🏥 Hospital & Emergency Medical System notified for ${inc.name || inc.type}`, 'green', 'dispatch');
+
+          fetch(`${INCIDENTS_API_URL}/${incId}/checklist`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ hospitalNotified: true })
+          })
+            .then((res) => res.ok && res.json())
+            .then((data) => {
+              if (data?.data?.checklist) {
+                setActiveQueue((prev) =>
+                  prev.map((item) => {
+                    const id = item.uniqueId || item.instanceId || item.id;
+                    if (id === incId) return { ...item, checklist: { ...item.checklist, ...data.data.checklist } };
+                    return item;
+                  })
+                );
+              }
+            })
+            .catch(() => {
+              setActiveQueue((prev) =>
+                prev.map((item) => {
+                  const id = item.uniqueId || item.instanceId || item.id;
+                  if (id === incId) return { ...item, checklist: { ...(item.checklist || {}), hospitalNotified: true } };
+                  return item;
+                })
+              );
+            });
+        }
+      }
+
+      // 2. UNITS ARRIVED ON SCENE AUTOMATIC EVALUATION
+      // unitsArrived becomes true ONLY after ALL required dispatched units reach ON_SCENE / ARRIVED state.
+      const allUnitsArrived = incVehicles.every((v) => v.state === 'ON_SCENE' || v.state === 'RETURNING');
+      const unitsArrivedKey = `${incId}_checklist_unitsArrived`;
+
+      if (allUnitsArrived && !inc.checklist?.unitsArrived && !emittedStageEventsRef.current.has(unitsArrivedKey)) {
+        emittedStageEventsRef.current.add(unitsArrivedKey);
+        addLog(`✅ All required response units arrived on scene — ${inc.name || inc.type}`, 'green', 'dispatch');
+
+        fetch(`${INCIDENTS_API_URL}/${incId}/checklist`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ unitsArrived: true })
+        })
+          .then((res) => res.ok && res.json())
+          .then((data) => {
+            if (data?.data?.checklist) {
+              setActiveQueue((prev) =>
+                prev.map((item) => {
+                  const id = item.uniqueId || item.instanceId || item.id;
+                  if (id === incId) return { ...item, checklist: { ...item.checklist, ...data.data.checklist } };
+                  return item;
+                })
+              );
+            }
+          })
+          .catch(() => {
+            setActiveQueue((prev) =>
+              prev.map((item) => {
+                const id = item.uniqueId || item.instanceId || item.id;
+                if (id === incId) return { ...item, checklist: { ...(item.checklist || {}), unitsArrived: true } };
+                return item;
+              })
+            );
+          });
+      }
+    });
+  }, [liveVehicles, activeQueue, emitEventNotification]);
 
 
   const resetCity = async () => {
@@ -1009,20 +1102,43 @@ export default function DashboardPage() {
 
           {/* Role Filter Tabs */}
           <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide py-1">
-            {getFilterTabsForRole(viewRole).map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setSelectedTab(tab.id)}
-                className={`px-4 py-1.5 rounded-full border text-xs font-bold font-mono transition-all shrink-0 ${
-                  selectedTab === tab.id
-                    ? 'bg-[#33C8FF]/20 text-[#33C8FF] border-[#33C8FF]'
-                    : 'bg-slate-900/50 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-slate-300'
-                }`}
-              >
-                {tab.label} {selectedTab === tab.id && `(${activeQueue.length})`}
-              </button>
-            ))}
+            {getFilterTabsForRole(viewRole).map(tab => {
+              const tabCount = applySubFilter(filterIncidentsForRole(allRawIncidents, viewRole), viewRole, tab.id).length;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setSelectedTab(tab.id)}
+                  className={`px-4 py-1.5 rounded-full border text-xs font-bold font-mono transition-all shrink-0 ${
+                    selectedTab === tab.id
+                      ? 'bg-[#33C8FF]/20 text-[#33C8FF] border-[#33C8FF]'
+                      : 'bg-slate-900/50 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-slate-300'
+                  }`}
+                >
+                  {tab.label} ({tabCount})
+                </button>
+              );
+            })}
           </div>
+
+          {/* Role-Aware Filtered Empty State Banner */}
+          {activeQueue.length === 0 && allRawIncidents.length > 0 && (
+            <div className="glass-panel p-5 rounded-2xl border border-amber-500/30 bg-amber-500/10 flex items-center gap-4 animate-fade-in">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+                <ShieldAlert className="w-5 h-5" />
+              </div>
+              <div className="space-y-0.5">
+                <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                  No incidents currently visible to the {ROLE_LABELS[viewRole] || viewRole} view
+                </h4>
+                <p className="text-xs text-amber-300 font-mono">
+                  "{ROLE_DESCRIPTIONS[viewRole] || 'Scoped Incident Telemetry'}"
+                </p>
+                <p className="text-[11px] text-slate-400 font-mono">
+                  {allRawIncidents.length} active incident{allRawIncidents.length !== 1 ? 's are' : ' is'} present in the system, but scoped to other role permissions.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* AI Vision Camera Feed */}
           <div>
@@ -1347,7 +1463,12 @@ export default function DashboardPage() {
 
             <div className="grid grid-cols-2 gap-2">
               {Object.keys(masterIncidents).map((key) => {
-                const isActive = activeQueue.some((i) => (i.id === key || i.type === key) && i.status !== 'RESOLVED' && i.status !== 'ARCHIVED');
+                const isActive = activeQueue.some((i) => {
+                  const incId = String(i.id || i.uniqueId || '').toLowerCase();
+                  const incType = String(i.type || i.name || '').toLowerCase();
+                  const targetKey = String(key).toLowerCase();
+                  return (incId === targetKey || incId.startsWith(`${targetKey}_`) || incType.includes(targetKey)) && i.status !== 'RESOLVED' && i.status !== 'REJECTED' && i.status !== 'ARCHIVED';
+                });
                 const triggering = isTriggering[key];
                 const hasError = triggerError[key];
                 return (

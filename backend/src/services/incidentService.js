@@ -254,7 +254,11 @@ class IncidentService {
   async getIncidentById(id) {
     try {
       if (mongoose.connection.readyState === 1) {
-        const dbInc = await Incident.findOne({ $or: [{ id }, { uniqueId: id }] });
+        const query = [{ id }, { uniqueId: id }];
+        if (mongoose.Types.ObjectId.isValid(id)) {
+          query.push({ _id: id });
+        }
+        const dbInc = await Incident.findOne({ $or: query });
         if (dbInc) {
           const obj = dbInc.toObject ? dbInc.toObject() : dbInc;
           inMemoryIncidents.set(obj.id || id, obj);
@@ -266,7 +270,7 @@ class IncidentService {
     }
     if (inMemoryIncidents.has(id)) return inMemoryIncidents.get(id);
     for (const inc of inMemoryIncidents.values()) {
-      if (inc.uniqueId === id || inc.id === id) return inc;
+      if (inc.uniqueId === id || inc.id === id || String(inc._id) === String(id)) return inc;
     }
     return null;
   }
@@ -309,12 +313,16 @@ class IncidentService {
 
     try {
       if (mongoose.connection.readyState === 1) {
-        await Incident.findOneAndUpdate({ id: uniqueId }, newInc, { upsert: true, new: true });
+        const savedDoc = await Incident.create(newInc);
+        if (savedDoc) {
+          newInc._id = savedDoc._id;
+          logger.info(`[IncidentService] Saved to MongoDB Atlas with _id: ${savedDoc._id}`);
+        }
       }
     } catch (e) {
       console.error(`[DEBUG IncidentService DB Error] FULL ERROR for ${uniqueId}:`, e);
       if (e.errors) console.error(`[DEBUG IncidentService DB Error] ValidationError details:`, e.errors);
-      logger.error(`[IncidentService DB Error] Failed to upsert triggered incident '${uniqueId}':`, e.message);
+      logger.error(`[IncidentService DB Error] Failed to insert triggered incident '${uniqueId}':`, e.stack || e.message);
     }
 
     logger.info(`[IncidentService] Dynamic Incident Created: '${uniqueId}' -> AWAITING_APPROVAL (Phase 3)`);
@@ -501,18 +509,11 @@ class IncidentService {
 
   async resetAllIncidents() {
     inMemoryIncidents.clear();
-    try {
-      if (mongoose.connection.readyState === 1) {
-        await Incident.deleteMany({});
-      }
-    } catch (e) {
-      logger.error('[IncidentService DB Error] Failed to clear incidents table:', e.message);
-    }
-    logger.info(`[IncidentService] Reset City executed: All active incidents cleared.`);
+    logger.info(`[IncidentService] Reset City executed: Live simulation state reset. Historical MongoDB documents preserved.`);
     // Use the dedicated incident:reset event so Dashboard and Operator Console
-    // clear ALL state (activeQueue, timeline, phase, trigger buttons) atomically.
+    // clear live UI state (activeQueue, timeline, phase, trigger buttons) atomically.
     broadcastEvent('incident:reset', { id: 'all', reset: true });
-    return { success: true, message: 'All incidents reset to normal city status.' };
+    return { success: true, message: 'All live incidents reset to normal city status.' };
   }
 
   generateKnowledgeReport(inc, operatorName = 'System Operator') {

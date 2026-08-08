@@ -8,6 +8,7 @@ import operatorRoutes from './routes/operator.routes.js';
 import novaRoutes from './routes/nova.routes.js';
 import knowledgeRoutes from './routes/knowledge.routes.js';
 import visionRoutes from './routes/vision.routes.js';
+import datasetRoutes from './routes/dataset.routes.js';
 import { errorHandler } from './middleware/error.middleware.js';
 
 const app = express();
@@ -44,6 +45,10 @@ app.use('/api/knowledge', knowledgeRoutes);
 
 // AI Vision Inference Backend REST API Endpoints
 app.use('/api/vision', visionRoutes);
+
+// Dataset Generator Backend REST API Endpoints
+app.use('/dataset', datasetRoutes);
+app.use('/api/dataset', datasetRoutes);
 
 // Global Error Handler
 app.use(errorHandler);

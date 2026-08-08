@@ -15,8 +15,8 @@ const CHECKLIST_ITEMS = [
   { key: 'incidentVerified',  label: 'Incident Verified',              auto: true  },
   { key: 'teamNotified',      label: 'Response Team Notified',         auto: true  },
   { key: 'unitsDispatched',   label: 'Emergency Units Dispatched',     auto: true  },
-  { key: 'unitsArrived',      label: 'Units Arrived On Scene',         auto: false },
-  { key: 'hospitalNotified',  label: 'Hospital / Medical Notified',    auto: false },
+  { key: 'unitsArrived',      label: 'Units Arrived On Scene',         auto: true  },
+  { key: 'hospitalNotified',  label: 'Hospital / Medical Notified',    auto: true  },
   { key: 'incidentResolved',  label: 'Incident Resolved',              auto: true  },
 ];
 

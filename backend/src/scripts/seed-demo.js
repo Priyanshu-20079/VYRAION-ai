@@ -8,12 +8,12 @@ async function seedDemo() {
   
   await incidentService.resetAllIncidents();
   
-  // Seed 3 realistic in-progress incidents
+  // Seed 3 realistic in-progress incidents spanning traffic, fire, and hospital
   const i1 = await incidentService.triggerIncident('traffic');
   const i2 = await incidentService.triggerIncident('fire');
   const i3 = await incidentService.triggerIncident('hospital');
   
-  logger.info(`[Seed Demo] Successfully seeded 3 active incidents: ${i1.id}, ${i2.id}, ${i3.id}`);
+  logger.info(`[Seed Demo] Successfully seeded 3 active incidents spanning roles: ${i1.id}, ${i2.id}, ${i3.id}`);
   process.exit(0);
 }
 

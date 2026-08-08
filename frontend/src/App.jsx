@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { ViewRoleProvider } from './context/ViewRoleContext';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import AppLayout from './components/layout/AppLayout';
 import LandingPage from './pages/LandingPage';
@@ -11,6 +12,7 @@ import DashboardPage from './pages/DashboardPage';
 import KnowledgePage from './pages/KnowledgePage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage';
+import DatasetPage from './pages/DatasetPage';
 import OperatorConsolePage from './pages/OperatorConsolePage';
 import HospitalDashboardPage from './pages/HospitalDashboardPage';
 import AuthorityDashboardPage from './pages/AuthorityDashboardPage';
@@ -18,49 +20,52 @@ import AuthorityDashboardPage from './pages/AuthorityDashboardPage';
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* Public SaaS Landing & Auth Pages */}
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/landing" element={<LandingPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/operator/login" element={<OperatorLoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
+      <ViewRoleProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* Public SaaS Landing & Auth Pages */}
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/landing" element={<LandingPage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/operator/login" element={<OperatorLoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
 
-          {/* Standalone Operator Terminal (Operator Role Only) */}
-          <Route element={<ProtectedRoute allowedRole="operator" />}>
-            <Route path="/operator" element={<OperatorConsolePage />} />
-          </Route>
-
-          {/* Protected AI Operating System Routes (Admin Role Only) */}
-          <Route element={<ProtectedRoute allowedRole="admin" />}>
-            <Route element={<AppLayout />}>
-              <Route path="/dashboard" element={<DashboardPage />} />
-              <Route path="/chat" element={<Navigate to="/dashboard" replace />} />
-              <Route path="/knowledge" element={<KnowledgePage />} />
-              <Route path="/analytics" element={<AnalyticsPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
+            {/* Standalone Operator Terminal (Operator Role Only) */}
+            <Route element={<ProtectedRoute allowedRole="operator" />}>
+              <Route path="/operator" element={<OperatorConsolePage />} />
             </Route>
-          </Route>
 
-          {/* Hospital Dashboard Route */}
-          <Route element={<ProtectedRoute allowedRole="hospital" />}>
-            <Route element={<AppLayout />}>
-              <Route path="/hospital" element={<HospitalDashboardPage />} />
+            {/* Protected AI Operating System Routes (Admin Role Only) */}
+            <Route element={<ProtectedRoute allowedRole="admin" />}>
+              <Route element={<AppLayout />}>
+                <Route path="/dashboard" element={<DashboardPage />} />
+                <Route path="/chat" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/dataset" element={<DatasetPage />} />
+                <Route path="/knowledge" element={<KnowledgePage />} />
+                <Route path="/analytics" element={<AnalyticsPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+              </Route>
             </Route>
-          </Route>
 
-          {/* Authority Dashboard Route */}
-          <Route element={<ProtectedRoute allowedRole="authority" />}>
-            <Route element={<AppLayout />}>
-              <Route path="/authority" element={<AuthorityDashboardPage />} />
+            {/* Hospital Dashboard Route */}
+            <Route element={<ProtectedRoute allowedRole="hospital" />}>
+              <Route element={<AppLayout />}>
+                <Route path="/hospital" element={<HospitalDashboardPage />} />
+              </Route>
             </Route>
-          </Route>
 
-          {/* Catch-all fallback redirect */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
+            {/* Authority Dashboard Route */}
+            <Route element={<ProtectedRoute allowedRole="authority" />}>
+              <Route element={<AppLayout />}>
+                <Route path="/authority" element={<AuthorityDashboardPage />} />
+              </Route>
+            </Route>
+
+            {/* Catch-all fallback redirect */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </ViewRoleProvider>
     </AuthProvider>
   );
 }
