@@ -21,13 +21,21 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
+import { useViewRole } from '../context/ViewRoleContext';
+import { filterIncidentsForRole, getFilterTabsForRole, applySubFilter } from '../utils/incidentRoleFilters';
 import { OPERATOR_API_URL } from '../config/api';
 import { fetchNovaBlueprint, generateNovaBlueprint } from '../utils/novaDecisionEngine';
 
 export default function OperatorConsolePage() {
   const { token, user, logout, isDemoMode } = useAuth();
   const { socket, isConnected } = useSocket();
-  const [pendingIncidents, setPendingIncidents] = useState([]);
+  const { viewRole } = useViewRole(); // even though this is operator console, we might want to respect role or hardcode 'operator'. Let's hardcode 'operator' for filters.
+  
+  const [fetchedIncidents, setFetchedIncidents] = useState([]);
+  const [selectedTab, setSelectedTab] = useState('all');
+  
+  const pendingIncidents = applySubFilter(filterIncidentsForRole(fetchedIncidents, 'operator'), 'operator', selectedTab);
+
   const [blueprintsMap, setBlueprintsMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -109,27 +117,35 @@ export default function OperatorConsolePage() {
     let prevCount = 0;
     const fetchPending = async () => {
       try {
-        const res = await fetch(`${OPERATOR_API_URL}/pending`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const result = await res.json();
-          if (result.success && Array.isArray(result.data)) {
-            const data = result.data;
-            setPendingIncidents(data);
+        const [pendingRes, reportsRes] = await Promise.all([
+          fetch(`${OPERATOR_API_URL}/pending`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${OPERATOR_API_URL}/reports`, { headers: { Authorization: `Bearer ${token}` } })
+        ]);
 
-            // Trigger browser push notification when new incident arrives
-            if (data.length > prevCount && notificationPermissionRef.current) {
-              const latestInc = data[data.length - 1];
+        const allData = [];
+        if (pendingRes.ok) {
+          const resPending = await pendingRes.json();
+          if (resPending.success && Array.isArray(resPending.data)) allData.push(...resPending.data);
+        }
+        if (reportsRes.ok) {
+          const resReports = await reportsRes.json();
+          if (resReports.success && Array.isArray(resReports.data)) allData.push(...resReports.data);
+        }
+        
+        setFetchedIncidents(allData);
+
+        // Trigger browser push notification when new incident arrives
+        const pendingCount = allData.filter(i => i.status === 'AWAITING_APPROVAL').length;
+        if (pendingCount > prevCount && notificationPermissionRef.current) {
+              const latestInc = allData[allData.length - 1];
               new Notification(`🚨 ${latestInc.name || 'Emergency'} Incident`, {
                 body: `${latestInc.title || 'Incident detected'}. Operator authorization required for mission dispatch.`,
                 icon: '/pwa-icon.svg'
               });
               triggerHaptic([200, 100, 200]);
             }
-            prevCount = data.length;
-          }
-        }
+            prevCount = pendingCount;
+          
       } catch (e) {
         console.error('Operator console fetch error:', e);
       } finally {
@@ -151,7 +167,7 @@ export default function OperatorConsolePage() {
       const handleResolved = (data) => {
         const resolvedId = data?.id || data?.incident?.id;
         if (resolvedId && resolvedId !== 'all') {
-          setPendingIncidents((prev) =>
+          setFetchedIncidents((prev) =>
             prev.filter((i) => i.id !== resolvedId && i.uniqueId !== resolvedId)
           );
         } else {
@@ -161,7 +177,7 @@ export default function OperatorConsolePage() {
       };
 
       const handleReset = () => {
-        setPendingIncidents([]);
+        setFetchedIncidents([]);
       };
 
       const handleSessionInvalidated = (data) => {
@@ -230,7 +246,7 @@ export default function OperatorConsolePage() {
       const result = await res.json();
       if (res.ok && result.success) {
         setActionMessage(`✅ Mission '${id}' APPROVED. Field units dispatched. Auto-simulation completion timer running (60-120s).`);
-        setPendingIncidents((prev) => prev.filter((i) => i.id !== id && i.uniqueId !== id));
+        setFetchedIncidents((prev) => prev.filter((i) => i.id !== id && i.uniqueId !== id));
         if (notificationPermissionRef.current) {
           new Notification('✅ Mission Approved', {
             body: `Field units dispatched for ${id}. Dashboard updated.`,
@@ -258,7 +274,7 @@ export default function OperatorConsolePage() {
       const result = await res.json();
       if (res.ok && result.success) {
         setActionMessage(`🚫 Mission '${id}' REJECTED by operator.`);
-        setPendingIncidents((prev) => prev.filter((i) => i.id !== id && i.uniqueId !== id));
+        setFetchedIncidents((prev) => prev.filter((i) => i.id !== id && i.uniqueId !== id));
       }
     } catch (e) {
       setActionMessage(`⚠️ Failed to reject: ${e.message}`);
@@ -283,7 +299,7 @@ export default function OperatorConsolePage() {
         // Immediately remove the resolved incident from the operator queue.
         // The socket 'incident:resolved' broadcast will also trigger a re-fetch,
         // but this ensures the card disappears instantly for the operator.
-        setPendingIncidents((prev) => prev.filter((i) => i.id !== id && i.uniqueId !== id));
+        setFetchedIncidents((prev) => prev.filter((i) => i.id !== id && i.uniqueId !== id));
         if (notificationPermissionRef.current) {
           new Notification('✅ Mission Completed & Archived', {
             body: `Incident ${id} closed and archived to Knowledge Base.`,
@@ -472,6 +488,23 @@ export default function OperatorConsolePage() {
             <div className="flex items-center justify-between px-1 text-xs text-slate-400 font-bold">
               <span>🚨 ACTIVE EMERGENCY QUEUE ({pendingIncidents.length})</span>
               <span className="text-[#33C8FF] text-[10px]">Real-Time Sync</span>
+            </div>
+
+            {/* Operator Tabs */}
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide py-1 mb-2">
+              {getFilterTabsForRole('operator').map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setSelectedTab(tab.id)}
+                  className={`px-4 py-1.5 rounded-full border text-xs font-bold font-mono transition-all shrink-0 ${
+                    selectedTab === tab.id
+                      ? 'bg-[#33C8FF]/20 text-[#33C8FF] border-[#33C8FF]'
+                      : 'bg-slate-900/50 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-slate-300'
+                  }`}
+                >
+                  {tab.label} {selectedTab === tab.id && `(${pendingIncidents.length})`}
+                </button>
+              ))}
             </div>
 
             {pendingIncidents.map((activeIncident) => {

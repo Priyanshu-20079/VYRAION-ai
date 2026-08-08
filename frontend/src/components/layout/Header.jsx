@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTheme, THEMES } from '../../context/ThemeContext';
 import { useNotifications } from '../../context/NotificationContext';
 import { useAuth } from '../../context/AuthContext';
+import { useViewRole } from '../../context/ViewRoleContext';
 import {
   Search, Bell, Cpu, Database, Activity, Sparkles, Sun, Moon,
   ChevronDown, User, Shield, Palette, BellRing, ScrollText,
@@ -540,6 +541,7 @@ export default function Header() {
   const { themeId, theme } = useTheme();
   const { notifications, removeIncidentNotifications } = useNotifications();
   const { logout, user: authUser, isDemoMode } = useAuth();
+  const { viewRole, setViewRole } = useViewRole();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [activeModal, setActiveModal] = useState(null);
@@ -618,6 +620,22 @@ export default function Header() {
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
             <span>🟢 Administrator</span>
           </div>
+
+          <div className="hidden sm:inline-flex relative items-center">
+            <select
+              value={viewRole}
+              onChange={(e) => setViewRole(e.target.value)}
+              className="appearance-none outline-none cursor-pointer bg-[#33C8FF]/10 text-[#33C8FF] border border-[#33C8FF]/30 hover:bg-[#33C8FF]/20 px-3 py-1 pr-6 rounded-full text-xs font-semibold transition-colors"
+            >
+              <option value="operator">View: Operator</option>
+              <option value="authority">View: Authority</option>
+              <option value="hospital">View: Hospital</option>
+              <option value="investigator">View: Investigator</option>
+              <option value="reviewer">View: Reviewer</option>
+            </select>
+            <ChevronDown className="w-3 h-3 text-[#33C8FF] absolute right-2 pointer-events-none" />
+          </div>
+
 
           <div className="hidden sm:inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border"
             style={{ backgroundColor: 'color-mix(in srgb, var(--th-primary) 10%, transparent)', color: 'var(--th-primary)', borderColor: 'color-mix(in srgb, var(--th-primary) 25%, transparent)' }}>

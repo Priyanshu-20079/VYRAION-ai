@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import AIVisionStatusPanel from '../components/vision/AIVisionStatusPanel';
 import { fetchNovaBlueprint, generateNovaBlueprint } from '../utils/novaDecisionEngine';
 import { INCIDENTS_API_URL, OPERATOR_API_URL } from '../config/api';
@@ -29,14 +29,18 @@ import {
   ClipboardList
 } from 'lucide-react';
 import SingaporeSatelliteMap, { createDynamicIncident, findNearestResponders, buildRoadNetworkRoute } from '../components/common/SingaporeSatelliteMap';
+import IncidentChecklistPanel from '../components/common/IncidentChecklistPanel';
 import { MASTER_INCIDENTS, DISPATCH_UNITS, CITY_FACILITIES } from '../data/incidents';
 import { STATUS_COLORS } from '../utils/statusColors';
 import { useNotifications } from '../context/NotificationContext';
 import { useSocket } from '../context/SocketContext';
+import { useViewRole } from '../context/ViewRoleContext';
+import { filterIncidentsForRole, getFilterTabsForRole, applySubFilter } from '../utils/incidentRoleFilters';
 
 export default function DashboardPage() {
   const { emitEventNotification } = useNotifications();
   const { socket, isConnected } = useSocket();
+  const { viewRole } = useViewRole();
   const emittedStageEventsRef = useRef(new Set());
   const [activeQueue, setActiveQueue] = useState([]);
   const [novaBlueprint, setNovaBlueprint] = useState([]);
@@ -47,6 +51,7 @@ export default function DashboardPage() {
     }
     return false;
   });
+  const [selectedTab, setSelectedTab] = useState('all');
   const [isOfflineSimulation, setIsOfflineSimulation] = useState(false);
   const [isOperatorOnline, setIsOperatorOnline] = useState(null); // null = loading, true = online, false = offline
   const [modelUsed, setModelUsed] = useState('');
@@ -55,6 +60,11 @@ export default function DashboardPage() {
   const [liveVehicles, setLiveVehicles] = useState([]);
   const liveVehiclesRef = useRef([]);
   const [incidentAnimState, setIncidentAnimState] = useState({});
+
+  // Reset tab when viewRole changes
+  useEffect(() => {
+    setSelectedTab('all');
+  }, [viewRole]);
 
   // UI Navigation State
   const [currentPhase, setCurrentPhase] = useState(0);
@@ -183,11 +193,18 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchBackendIncidents = async () => {
       try {
-        const res = await fetch(`${INCIDENTS_API_URL}/active`);
+        const endpoint = ['investigator', 'reviewer'].includes(viewRole) 
+          ? `${INCIDENTS_API_URL}?role=${viewRole}` 
+          : `${INCIDENTS_API_URL}/active?role=${viewRole}`;
+        const res = await fetch(endpoint);
         if (res.ok) {
           const result = await res.json();
           if (result.success && Array.isArray(result.data)) {
-            const backendQueue = result.data.map((inc) => {
+            let backendQueue = result.data;
+            backendQueue = filterIncidentsForRole(backendQueue, viewRole);
+            backendQueue = applySubFilter(backendQueue, viewRole, selectedTab);
+            
+            backendQueue = backendQueue.map((inc) => {
               let masterKey = 'traffic';
               const rawId = String(inc.type || inc.name || inc.id || '').toLowerCase();
               if (rawId.includes('fire')) masterKey = 'fire';
@@ -228,6 +245,7 @@ export default function DashboardPage() {
                 lng: inc.lng || masterDef.lng,
                 hotspot: inc.hotspot || masterDef.hotspot || 'Expressway Corridor',
                 dispatchedUnits,
+                checklist: inc.checklist || {},
                 vehicleIcon: masterDef.vehicleIcon || '🚑',
                 vehicleName: masterDef.vehicleName || 'ALS Ambulance',
                 timeDetected: inc.timeDetected || new Date(inc.detectedAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -261,23 +279,60 @@ export default function DashboardPage() {
     fetchBackendIncidents();
 
     if (socket && isConnected) {
-      const handleIncidentChange = () => { fetchBackendIncidents(); };
+      // Full re-fetch on most events; also patch checklist in-place when broadcast contains it
+      const handleIncidentChange = (data) => {
+        // If the broadcast carries a full incident with a checklist, patch it optimistically
+        // before the fetch completes so the checklist panel updates immediately.
+        const broadcastInc = data?.incident;
+        if (broadcastInc?.checklist) {
+          const bId = broadcastInc.id || broadcastInc.uniqueId;
+          setActiveQueue(prev => prev.map(inc => {
+            const id = inc.uniqueId || inc.instanceId || inc.id;
+            if (id === bId || inc.id === bId) {
+              return { ...inc, checklist: { ...inc.checklist, ...broadcastInc.checklist } };
+            }
+            return inc;
+          }));
+        }
+        fetchBackendIncidents();
+      };
 
       const handleResolved = (data) => {
         const resolvedId = data?.id || data?.incident?.id;
         const incidentName = data?.incident?.name || data?.incident?.type || 'Emergency';
+        const resolvedChecklist = data?.incident?.checklist;
 
-        setActiveQueue((prev) => {
-          const updated = prev.filter((i) => i.id !== resolvedId && i.uniqueId !== resolvedId);
-          if (updated.length === 0) setCurrentPhase(0);
-          return updated;
-        });
+        // Step 1: Optimistically apply incidentResolved=true to the checklist in activeQueue
+        // so the panel shows 6/6 BEFORE the card is removed.
+        if (resolvedId) {
+          setActiveQueue(prev => prev.map(i => {
+            const iId = i.uniqueId || i.id;
+            if (iId === resolvedId || i.id === resolvedId) {
+              return {
+                ...i,
+                status: 'RESOLVED',
+                phase: 5,
+                checklist: { ...(i.checklist || {}), ...(resolvedChecklist || {}), incidentResolved: true }
+              };
+            }
+            return i;
+          }));
+        }
 
+        // Step 2: After a brief display window (2 seconds), remove the incident from the active queue
         const resolvedKey = `${resolvedId}_timeline_resolved`;
         if (!emittedStageEventsRef.current.has(resolvedKey)) {
           emittedStageEventsRef.current.add(resolvedKey);
           addLog(`✅ Incident Resolved: ${incidentName} successfully resolved. Responders returned.`, 'green', 'resolution');
         }
+
+        setTimeout(() => {
+          setActiveQueue((prev) => {
+            const updated = prev.filter((i) => i.id !== resolvedId && i.uniqueId !== resolvedId);
+            if (updated.length === 0) setCurrentPhase(0);
+            return updated;
+          });
+        }, 2500);
       };
 
       const handleReset = () => {
@@ -310,7 +365,7 @@ export default function DashboardPage() {
       const pollInterval = setInterval(fetchBackendIncidents, 5000);
       return () => clearInterval(pollInterval);
     }
-  }, [socket, isConnected]);
+  }, [socket, isConnected, viewRole, selectedTab]);
 
   // ─── OPERATOR ONLINE STATUS MONITORING ───────────────────────────────────
   useEffect(() => {
@@ -431,6 +486,15 @@ export default function DashboardPage() {
       console.error('Resolve incident error:', e);
     }
   };
+
+  // Called by IncidentChecklistPanel when a PATCH succeeds, to keep activeQueue in sync
+  const handleChecklistUpdate = useCallback((incId, updatedChecklist) => {
+    setActiveQueue(prev => prev.map(inc => {
+      const id = inc.uniqueId || inc.instanceId || inc.id;
+      if (id === incId) return { ...inc, checklist: { ...inc.checklist, ...updatedChecklist } };
+      return inc;
+    }));
+  }, []);
 
   const handleVisionIncidentTrigger = async (visionData) => {
     const type = visionData.id;
@@ -660,6 +724,36 @@ export default function DashboardPage() {
           type: 'info',
           expiry: '15min'
         });
+
+        // Auto-set checklist.unitsArrived = true via API (first unit to arrive triggers this)
+        const arrivedChecklistKey = `${v.incidentId}_checklist_unitsArrived`;
+        if (!emittedStageEventsRef.current.has(arrivedChecklistKey)) {
+          emittedStageEventsRef.current.add(arrivedChecklistKey);
+          fetch(`${INCIDENTS_API_URL}/${v.incidentId}/checklist`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ unitsArrived: true }),
+          }).then(res => res.ok && res.json()).then(data => {
+            if (data?.data?.checklist) {
+              setActiveQueue(prev => prev.map(inc => {
+                const id = inc.uniqueId || inc.instanceId || inc.id;
+                if (id === v.incidentId || inc.id === v.incidentId) {
+                  return { ...inc, checklist: { ...inc.checklist, ...data.data.checklist } };
+                }
+                return inc;
+              }));
+            }
+          }).catch(() => {
+            // If API call fails, patch local state anyway for UX consistency
+            setActiveQueue(prev => prev.map(inc => {
+              const id = inc.uniqueId || inc.instanceId || inc.id;
+              if (id === v.incidentId || inc.id === v.incidentId) {
+                return { ...inc, checklist: { ...(inc.checklist || {}), unitsArrived: true } };
+              }
+              return inc;
+            }));
+          });
+        }
       }
 
       // Unit returning to base
@@ -670,6 +764,7 @@ export default function DashboardPage() {
       }
     });
   }, [liveVehicles, emitEventNotification]);
+
 
   const resetCity = async () => {
     setCurrentPhase(0);
@@ -898,6 +993,23 @@ export default function DashboardPage() {
         {/* ─── LEFT COLUMN: MAP + AI WORKFLOW (8 cols = ~67%) ───────────────── */}
         <div className="lg:col-span-8 flex flex-col gap-4">
 
+          {/* Role Filter Tabs */}
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide py-1">
+            {getFilterTabsForRole(viewRole).map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setSelectedTab(tab.id)}
+                className={`px-4 py-1.5 rounded-full border text-xs font-bold font-mono transition-all shrink-0 ${
+                  selectedTab === tab.id
+                    ? 'bg-[#33C8FF]/20 text-[#33C8FF] border-[#33C8FF]'
+                    : 'bg-slate-900/50 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-slate-300'
+                }`}
+              >
+                {tab.label} {selectedTab === tab.id && `(${activeQueue.length})`}
+              </button>
+            ))}
+          </div>
+
           {/* AI Vision Camera Feed */}
           <div>
             <div className="flex items-center gap-2 mb-1.5 px-1">
@@ -1091,15 +1203,31 @@ export default function DashboardPage() {
                           {incDef.name && (
                             <div className="text-[10px] text-amber-400/80 truncate">📌 {incDef.name}</div>
                           )}
-                          {v.state === 'DISPATCHED' && (
+                          {v.state !== 'IDLE' && (
                             <div className="space-y-1">
-                              <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden border border-slate-800">
-                                <div className="h-full bg-[#33C8FF] rounded-full transition-all duration-300" style={{ width: `${Math.round((v.segmentProgress || 0) * 100)}%` }} />
-                              </div>
-                              <div className="flex justify-between items-center text-[10px] font-mono text-slate-400">
-                                <span>Progress: {Math.round((v.segmentProgress || 0) * 100)}%</span>
-                                <span className="text-emerald-400 font-bold">{v.eta || '~8 min'}</span>
-                              </div>
+                              {(() => {
+                                let totalProgress = 0;
+                                if (v.state === 'STATIONARY_ALERT') totalProgress = 15;
+                                else if (v.state === 'DISPATCHED') {
+                                  const totalSegs = Math.max(1, (v.route?.length || 2) - 1);
+                                  const routeProgress = ((v.segmentIndex || 0) + (v.segmentProgress || 0)) / totalSegs;
+                                  totalProgress = 15 + Math.min(1, Math.max(0, routeProgress)) * 55;
+                                }
+                                else if (v.state === 'ON_SCENE') totalProgress = 90;
+                                else if (v.state === 'RETURNING') totalProgress = 100;
+
+                                return (
+                                  <>
+                                    <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden border border-slate-800">
+                                      <div className="h-full bg-[#33C8FF] rounded-full transition-all duration-300" style={{ width: `${Math.round(totalProgress)}%` }} />
+                                    </div>
+                                    <div className="flex justify-between items-center text-[10px] font-mono text-slate-400">
+                                      <span>Progress: {Math.round(totalProgress)}%</span>
+                                      <span className="text-emerald-400 font-bold">{v.eta || '~8 min'}</span>
+                                    </div>
+                                  </>
+                                );
+                              })()}
                             </div>
                           )}
                           {v.state === 'ON_SCENE' && (
@@ -1248,6 +1376,16 @@ export default function DashboardPage() {
               </button>
             </div>
           </div>
+
+          {/* ─── INCIDENT ACTION CHECKLIST ─────────────────────────────── */}
+          {activeQueue.length > 0 && (
+            <div className="glass-panel p-4 rounded-2xl border border-[#33C8FF]/30 space-y-3 bg-gradient-to-b from-slate-950 via-[#101827] to-slate-950 shadow-xl">
+              <IncidentChecklistPanel
+                activeQueue={activeQueue}
+                onChecklistUpdate={handleChecklistUpdate}
+              />
+            </div>
+          )}
 
           {/* Live Command Timeline */}
           <div className="glass-panel p-4 rounded-2xl border border-white/10 flex flex-col gap-2.5" style={{ maxHeight: '420px' }}>

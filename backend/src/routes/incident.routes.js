@@ -3,10 +3,41 @@ import { incidentService } from '../services/incidentService.js';
 
 const router = express.Router();
 
+const applyServerRoleFilter = (incidents, role) => {
+  if (!role || role === 'all') return incidents;
+
+  if (role === 'operator') {
+    return incidents.filter(i => i.status === 'AWAITING_APPROVAL' || i.status === 'APPROVED' || i.status === 'RESOLVED');
+  }
+
+  if (role === 'hospital') {
+    return incidents.filter(i => {
+      const typeStr = (i.type || '').toLowerCase();
+      const idStr = (i.id || '').toLowerCase();
+      if (typeStr.includes('medical') || typeStr.includes('hospital') || idStr.includes('medical') || idStr.includes('hospital')) {
+        return true;
+      }
+      if (Array.isArray(i.dispatchedUnits)) {
+        return i.dispatchedUnits.some(u => (u.category || '').toLowerCase() === 'hospital');
+      }
+      return false;
+    });
+  }
+
+  if (role === 'investigator' || role === 'reviewer') {
+    return incidents.filter(i => i.status === 'RESOLVED');
+  }
+
+  return incidents;
+};
+
 // GET /api/incidents - List all incidents
 router.get('/', async (req, res, next) => {
   try {
-    const incidents = await incidentService.getAllIncidents();
+    let incidents = await incidentService.getAllIncidents();
+    if (req.query.role) {
+      incidents = applyServerRoleFilter(incidents, req.query.role);
+    }
     res.json({ success: true, count: incidents.length, data: incidents });
   } catch (err) {
     next(err);
@@ -16,7 +47,10 @@ router.get('/', async (req, res, next) => {
 // GET /api/incidents/active - List active incidents
 router.get('/active', async (req, res, next) => {
   try {
-    const incidents = await incidentService.getActiveIncidents();
+    let incidents = await incidentService.getActiveIncidents();
+    if (req.query.role) {
+      incidents = applyServerRoleFilter(incidents, req.query.role);
+    }
     res.json({ success: true, count: incidents.length, data: incidents });
   } catch (err) {
     next(err);
@@ -58,5 +92,17 @@ router.patch('/:id/resolve', async (req, res, next) => {
     next(err);
   }
 });
+
+// PATCH /api/incidents/:id/checklist - Merge a partial checklist update
+router.patch('/:id/checklist', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const updated = await incidentService.updateChecklist(id, req.body);
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
 
 export default router;

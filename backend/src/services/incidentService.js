@@ -294,7 +294,15 @@ class IncidentService {
       hotspot: payload.hotspot || 'Expressway Corridor',
       dispatchedUnits: payload.dispatchedUnits || def.fieldResponse,
       detectedAt: now,
-      timeDetected: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      timeDetected: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      checklist: {
+        incidentVerified: true,
+        teamNotified:     false,
+        unitsDispatched:  false,
+        unitsArrived:     false,
+        hospitalNotified: false,
+        incidentResolved: false
+      }
     };
 
     inMemoryIncidents.set(uniqueId, newInc);
@@ -325,6 +333,24 @@ class IncidentService {
     inc.approvedAt = new Date(now);
     inc.missionDurationMs = randomDurationMs;
     inc.missionEndTime = now + randomDurationMs;
+    // Patch in-memory checklist for approve
+    if (!inc.checklist) inc.checklist = {};
+    inc.checklist.teamNotified = true;
+    inc.checklist.unitsDispatched = true;
+
+    // Auto-set hospitalNotified when medical/ambulance units are among the dispatched units.
+    // This covers Traffic Accident (ambulance), Medical Emergency, Fire (ambulance), Hospital, Hazmat.
+    const units = inc.dispatchedUnits || [];
+    const hasMedical = units.some((u) => {
+      const cat = (u.category || u.type || u.unit || '').toLowerCase();
+      return cat.includes('hospital') || cat.includes('medical') || cat.includes('ambulance') || cat.includes('health');
+    }) || ['medical', 'hospital', 'traffic', 'fire', 'hazmat'].includes(
+      inc.id && inc.id.includes('_') ? inc.id.split('_')[0] : (inc.id || '')
+    );
+    if (hasMedical) {
+      inc.checklist.hospitalNotified = true;
+    }
+
     inc.liveStage = 'En Route';
     inc.operator = operatorName;
 
@@ -332,7 +358,14 @@ class IncidentService {
 
     try {
       if (mongoose.connection.readyState === 1) {
-        await Incident.findOneAndUpdate({ id: targetId }, {
+        const checklistPersist = {
+          'checklist.teamNotified': true,
+          'checklist.unitsDispatched': true,
+        };
+        if (inc.checklist.hospitalNotified) {
+          checklistPersist['checklist.hospitalNotified'] = true;
+        }
+        await Incident.findOneAndUpdate({ $or: [{ id: targetId }, { uniqueId: targetId }] }, {
           status: 'APPROVED',
           phase: 4,
           approvedAt: inc.approvedAt,
@@ -340,7 +373,8 @@ class IncidentService {
           missionEndTime: inc.missionEndTime,
           liveStage: inc.liveStage,
           operator: inc.operator,
-          dispatchedUnits: inc.dispatchedUnits
+          dispatchedUnits: inc.dispatchedUnits,
+          ...checklistPersist
         }, { upsert: true });
       }
     } catch (e) {
@@ -387,6 +421,10 @@ class IncidentService {
     // so the Dashboard can unlock the exact trigger button for this incident.
     const typeKey = inc.id && inc.id.includes('_') ? inc.id.split('_')[0] : (inc.id || 'unknown');
 
+    // Patch in-memory checklist for resolve
+    if (!inc.checklist) inc.checklist = {};
+    inc.checklist.incidentResolved = true;
+
     const report = this.generateKnowledgeReport(inc, operatorName || inc.operator);
     inMemoryReports.unshift(report);
 
@@ -394,16 +432,68 @@ class IncidentService {
 
     try {
       if (mongoose.connection.readyState === 1) {
-        await Incident.findOneAndUpdate({ id }, { status: 'RESOLVED', phase: 5, resolvedAt: inc.resolvedAt });
+        await Incident.findOneAndUpdate({ $or: [{ id }, { uniqueId: id }] }, {
+          status: 'RESOLVED', phase: 5, resolvedAt: inc.resolvedAt,
+          'checklist.incidentResolved': true
+        });
       }
     } catch (e) {
       logger.error(`[IncidentService DB Error] Failed to resolve incident '${id}':`, e.message);
     }
 
     logger.info(`[IncidentService] RESOLVED & ARCHIVED incident '${id}' (Knowledge Report generated)`);
-    // Broadcast with full incident details including typeKey so Dashboard removes the
-    // right incident from activeQueue and unlocks the correct Trigger button.
+    // Broadcast phase-changed FIRST so checklist panels see incidentResolved=true before the
+    // incident:resolved event causes the Dashboard to remove the card from activeQueue.
+    broadcastEvent('incident:phase-changed', { id, phase: 5, status: 'RESOLVED', incident: inc });
+    // Then broadcast the resolved event for cleanup (removes card, unlocks trigger button, etc.)
     broadcastEvent('incident:resolved', { incident: inc, report, typeKey, id });
+    return inc;
+  }
+
+  // ─── CHECKLIST UPDATE ────────────────────────────────────────────────────
+  async updateChecklist(id, checklistPatch) {
+    let inc = await this.getIncidentById(id);
+    if (!inc) throw new Error(`Incident '${id}' not found`);
+
+    const targetId = inc.id || id;
+
+    // Merge patch into in-memory checklist
+    if (!inc.checklist) inc.checklist = {};
+    Object.assign(inc.checklist, checklistPatch);
+    inMemoryIncidents.set(targetId, inc);
+
+    try {
+      if (mongoose.connection.readyState === 1) {
+        // Build $set payload with dot-notation keys so we only touch changed fields
+        const setPayload = {};
+        for (const [key, value] of Object.entries(checklistPatch)) {
+          setPayload[`checklist.${key}`] = value;
+        }
+        const updated = await Incident.findOneAndUpdate(
+          { $or: [{ id: targetId }, { uniqueId: targetId }] },
+          { $set: setPayload },
+          { new: true }
+        );
+
+        // Timeline event
+        const entries = Object.entries(checklistPatch).map(([k, v]) => `${k} = ${v}`).join(', ');
+        logger.info(`[IncidentService] ☑ Checklist updated for '${targetId}': ${entries}`);
+
+        // Audit log
+        logger.info(`[AuditLog] action=CHECKLIST_UPDATED incidentId=${targetId} patch=${JSON.stringify(checklistPatch)}`);
+
+        // Broadcast so all connected clients reconcile their state (include phase+status so handleIncidentChange merges correctly)
+        const finalInc = updated ? (updated.toObject ? updated.toObject() : updated) : inc;
+        broadcastEvent('incident:phase-changed', { id: targetId, phase: finalInc.phase, status: finalInc.status, incident: finalInc });
+
+        return updated ? (updated.toObject ? updated.toObject() : updated) : inc;
+      }
+    } catch (e) {
+      logger.error(`[IncidentService DB Error] Failed to update checklist for '${targetId}':`, e.message);
+    }
+
+    // Offline fallback — broadcast with in-memory data
+    broadcastEvent('incident:phase-changed', { id: targetId, incident: inc });
     return inc;
   }
 

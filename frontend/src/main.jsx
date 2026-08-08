@@ -4,6 +4,7 @@ import App from './App';
 import { ThemeProvider } from './context/ThemeContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { SocketProvider } from './context/SocketContext';
+import { ViewRoleProvider } from './context/ViewRoleContext';
 import './styles/index.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -11,7 +12,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <ThemeProvider>
       <NotificationProvider>
         <SocketProvider>
-          <App />
+          <ViewRoleProvider>
+            <App />
+          </ViewRoleProvider>
         </SocketProvider>
       </NotificationProvider>
     </ThemeProvider>
