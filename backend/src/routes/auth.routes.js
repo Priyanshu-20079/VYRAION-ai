@@ -80,8 +80,31 @@ const runRoleMigration = async () => {
         { $set: { role: 'operator' } }
       );
 
+      const demoUsers = [
+        { email: 'admin@vyraion.demo', name: 'System Admin', role: 'admin', pass: 'demo123' },
+        { email: 'police@vyraion.demo', name: 'Police Command', role: 'authority', pass: 'demo123' },
+        { email: 'hospital@vyraion.demo', name: 'Hospital Ops', role: 'hospital', pass: 'demo123' }
+      ];
+
+      for (const u of demoUsers) {
+        const existing = await User.findOne({ email: u.email });
+        if (!existing) {
+          await User.create({
+            name: u.name,
+            email: u.email,
+            username: u.email.split('@')[0],
+            password: u.pass,
+            role: u.role
+          });
+          logger.info(`[Demo Seed] Idempotently created demo account: ${u.email}`);
+        } else if (existing.role !== u.role) {
+          existing.role = u.role;
+          await existing.save();
+        }
+      }
+
       migrationDone = true;
-      logger.info('[Auth Migration] Role migration complete.');
+      logger.info('[Auth Migration] Role migration and demo user seeding complete.');
     }
   } catch (err) {
     logger.error(`[Auth Migration Error]: ${err.message}`);
@@ -236,15 +259,20 @@ router.post('/login', authLimiter, async (req, res) => {
       }).select('+password');
 
       if (!user) {
-        // First-time login — auto-register
-        logger.info(`[Auth Login] Auto-registering new user: ${cleanEmail}`);
-        user = await User.create({
-          name: cleanEmail.split('@')[0],
-          email: cleanEmail,
-          username: cleanEmail.split('@')[0],
-          password: password,
-          role: assignedRole
-        });
+        const demoAccounts = ['admin@vyraion.demo', 'police@vyraion.demo', 'hospital@vyraion.demo', 'operator@vyraion.demo', 'reviewer@vyraion.demo', 'investigator@vyraion.demo', 'user@vyraion.demo'];
+        if (demoAccounts.includes(cleanEmail)) {
+          logger.info(`[Auth Login] Auto-seeding demo user on first login: ${cleanEmail}`);
+          user = await User.create({
+            name: cleanEmail.split('@')[0],
+            email: cleanEmail,
+            username: cleanEmail.split('@')[0],
+            password: 'demo123',
+            role: assignedRole
+          });
+        } else {
+          logger.warn(`[Auth Login FAILURE] User not found: ${cleanEmail}`);
+          return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+        }
       }
 
       // Always enforce correct role from email policy

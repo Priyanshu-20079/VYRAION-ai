@@ -100,51 +100,6 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* Department Demo Accounts */}
-        <div className="mb-6 space-y-2 font-mono">
-          <p className="text-[10px] uppercase tracking-widest text-slate-400 font-bold text-center">
-            Login as Department Demo:
-          </p>
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              type="button"
-              onClick={() => { setEmail('admin@vyraion.demo'); setPassword('demo123'); }}
-              className={`py-2.5 px-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer text-center flex flex-col items-center gap-1 ${
-                email === 'admin@vyraion.demo'
-                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-md'
-                  : 'bg-slate-900/60 hover:bg-slate-800 text-slate-300 border-slate-800'
-              }`}
-            >
-              <span className="text-sm">👑</span>
-              <span className="text-[11px]">Admin</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => { setEmail('police@vyraion.demo'); setPassword('demo123'); }}
-              className={`py-2.5 px-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer text-center flex flex-col items-center gap-1 ${
-                email === 'police@vyraion.demo'
-                  ? 'bg-blue-500/20 text-blue-300 border-blue-500/50 shadow-md'
-                  : 'bg-slate-900/60 hover:bg-slate-800 text-slate-300 border-slate-800'
-              }`}
-            >
-              <span className="text-sm">👮</span>
-              <span className="text-[11px]">Police / Fire</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => { setEmail('hospital@vyraion.demo'); setPassword('demo123'); }}
-              className={`py-2.5 px-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer text-center flex flex-col items-center gap-1 ${
-                email === 'hospital@vyraion.demo'
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-md'
-                  : 'bg-slate-900/60 hover:bg-slate-800 text-slate-300 border-slate-800'
-              }`}
-            >
-              <span className="text-sm">🏥</span>
-              <span className="text-[11px]">Hospital</span>
-            </button>
-          </div>
-        </div>
-
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Email Field */}
           <div className="space-y-1.5 text-left">
@@ -237,6 +192,57 @@ export default function LoginPage() {
             </Link>
           </div>
         </form>
+
+        {/* DEMO LOGIN CREDENTIALS SECTION */}
+        <div className="mt-6 pt-5 border-t border-slate-800/80 space-y-3 font-mono">
+          <div className="text-center space-y-1">
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center justify-center gap-1.5">
+              <span>🔑 DEMO LOGIN CREDENTIALS</span>
+            </h3>
+            <p className="text-[10px] text-slate-400">
+              Click a button to populate credentials into the form above:
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => { setEmail('admin@vyraion.demo'); setPassword('demo123'); }}
+              className="p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-amber-500/30 text-amber-300 text-[11px] font-bold transition-all cursor-pointer text-center space-y-0.5"
+            >
+              <div>👑 Admin Demo</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setEmail('police@vyraion.demo'); setPassword('demo123'); }}
+              className="p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-blue-500/30 text-blue-300 text-[11px] font-bold transition-all cursor-pointer text-center space-y-0.5"
+            >
+              <div>👮 Police Demo</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setEmail('hospital@vyraion.demo'); setPassword('demo123'); }}
+              className="p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-emerald-500/30 text-emerald-300 text-[11px] font-bold transition-all cursor-pointer text-center space-y-0.5"
+            >
+              <div>🏥 Hospital Demo</div>
+            </button>
+          </div>
+
+          <div className="p-3 rounded-xl bg-slate-950/90 border border-slate-800 text-[10px] text-slate-300 space-y-1.5 font-mono">
+            <div className="flex items-center justify-between">
+              <span className="text-amber-400 font-bold">Administrator</span>
+              <span>Email: <code>admin@vyraion.demo</code> | Pass: <code>demo123</code></span>
+            </div>
+            <div className="flex items-center justify-between border-t border-slate-800/60 pt-1">
+              <span className="text-blue-400 font-bold">Police / Fire</span>
+              <span>Email: <code>police@vyraion.demo</code> | Pass: <code>demo123</code></span>
+            </div>
+            <div className="flex items-center justify-between border-t border-slate-800/60 pt-1">
+              <span className="text-emerald-400 font-bold">Hospital Dept</span>
+              <span>Email: <code>hospital@vyraion.demo</code> | Pass: <code>demo123</code></span>
+            </div>
+          </div>
+        </div>
 
       </div>
 
