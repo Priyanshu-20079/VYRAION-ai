@@ -7,47 +7,92 @@
 
 ---
 
-## 🚀 Live Demo & Deployment Links
+## 🚀 Live Demo Links
 
-| Interface | Link / URL | Purpose |
+| Interface | URL | Purpose |
 | :--- | :--- | :--- |
-| **Main Dashboard** | `YOUR_FRONTEND_URL` | EOC Command Center & Multi-Agent Map |
-| **Operator Console** | `YOUR_OPERATOR_URL` | Standalone Emergency Operator PWA Terminal |
-| **Dataset Generator** | `YOUR_DATASET_URL` | MongoDB Atlas Incident Dataset & Report Export |
-| **Backend Express API** | `YOUR_BACKEND_URL` | Node/Express API & Socket.io WebSockets Server |
-| **AI Vector Service** | `YOUR_AI_SERVICE_URL` | FastAPI Microservice & ChromaDB RAG Engine |
-| **GitHub Repository** | [Priyanshu-20079/VYRAION-ai](https://github.com/Priyanshu-20079/VYRAION-ai) | Full Monorepo Source Code & CI Pipeline |
+| **🌐 Main Dashboard** | `YOUR_FRONTEND_URL` | Main EOC Emergency Command Dashboard |
+| **🚨 Operator Console** | `YOUR_OPERATOR_URL` | Standalone Operator PWA Dispatch Terminal |
+| **📊 Dataset Generator** | `YOUR_DATASET_URL` | MongoDB Atlas Incident Dataset & Report Generator |
+| **⚙️ Backend API** | `YOUR_BACKEND_URL` | Node.js / Express REST API & Socket.io Server |
+| **🤖 AI Service** | `YOUR_AI_SERVICE_URL` | Python FastAPI Microservice & ChromaDB RAG Vector Store |
+| **💻 GitHub** | [Priyanshu-20079/VYRAION-ai](https://github.com/Priyanshu-20079/VYRAION-ai) | Full Monorepo Source Code & CI Pipeline |
 
 ---
 
 ## 🔐 Demo Login Accounts
 
-| Role | Email / ID | Password | Access Level & View |
+| Role | Email / ID | Password | Dashboard |
 | :--- | :--- | :--- | :--- |
-| **Operator** | `operator@vyraion.ai` | `Dispatch@2026` | Standalone Operator Console (`/operator`) |
-| **Admin** | `admin@vyraion.ai` | `Admin@2026` *(or any 6+ char pass)* | Full EOC Admin Command Dashboard (`/dashboard`) |
-| **Police / Authority** | `DEMO ACCOUNT NOT CONFIGURED` | *(Accessible via Role Switcher)* | Public Safety & Traffic Dispatch View |
-| **Hospital / Medical** | `DEMO ACCOUNT NOT CONFIGURED` | *(Accessible via Role Switcher)* | Healthcare, Trauma & Ambulance Dispatch View |
+| **Admin** | `admin@vyraion.ai` | `Admin@2026` *(or any 6+ char pass)* | Admin Command Dashboard (`/dashboard`) |
+| **Operator** | `operator@vyraion.ai` | `Dispatch@2026` | Operator Console (`/operator`) |
+| **Police** | `DEMO ACCOUNT NOT CONFIGURED` | *(Accessible via UI Role Switcher)* | Police / Authority View |
+| **Hospital** | `DEMO ACCOUNT NOT CONFIGURED` | *(Accessible via UI Role Switcher)* | Hospital & Healthcare View |
 
 > [!NOTE]
-> In addition to account login, judges can instantly test any operational role using the **Role Switcher** in the top navigation header (`View: Authority`, `View: Hospital`, `View: Investigator`, `View: Reviewer`, `View: Admin`, `View: Citizen User`, `View: Operator`).
+> In addition to account login, judges can instantly test any operational role using the **Role Switcher** dropdown in the top header (`View: Authority`, `View: Hospital`, `View: Investigator`, `View: Reviewer`, `View: Admin`, `View: Citizen User`, `View: Operator`).
 
 ---
 
-## 🧑‍⚖️ Judge Quick Start Walkthrough
+# 🧑‍⚖️ Complete Judge Demonstration
 
-Follow this 5-minute step-by-step sequence during evaluation:
+Follow this step-by-step walkthrough to test and evaluate the entire VYRAION OS platform from start to finish:
 
-1. **Open Main Dashboard** (`/dashboard`): Sign in using `admin@vyraion.ai`.
-2. **Trigger Emergency Incident**: Click any trigger button under *Emergency Simulation* (**Traffic Accident**, **Fire Outbreak**, **Medical Emergency**, or **Hospital Power Failure**).
-3. **Observe Real-Time Telemetry**: Watch the incident populate on the Singapore Satellite Map and broadcast live via Socket.io.
-4. **Open Operator Console** (`/operator`): Log in as `operator@vyraion.ai` / `Dispatch@2026`.
-5. **Approve & Dispatch**: Review the incoming emergency telemetry, inspect AI recommendations, and click **Approve & Dispatch**.
-6. **Automated Checklist Lifecycle**: Track real-time response unit navigation as units move from station to scene.
-7. **Resolve Incident**: Complete response operations and click **Resolve Incident**.
-8. **Open Dataset Generator** (`/dataset`): Inspect the real-time record populated from MongoDB Atlas (`vyraion.incidents`).
-9. **Export Single Incident Report**: Click **PDF**, **CSV**, **HTML**, or **JSON** for the selected incident to download a comprehensive report.
-10. **Demonstrate Role Scoping**: Toggle the Header Role Switcher to **Hospital** or **Investigator** to verify role-aware incident scoping and active count filtering.
+### STEP 1 — OPEN THE MAIN APPLICATION
+```text
+Main Dashboard URL:
+YOUR_FRONTEND_URL
+```
+1. Navigate to the **Main Dashboard** in your browser (`YOUR_FRONTEND_URL` or `/dashboard`).
+2. Log in using the Admin demo account (`admin@vyraion.ai`).
+3. Confirm that the **Singapore Satellite Map**, **AI Decision Engine Status**, **Live Command Feed**, and **EOC Control Panels** load immediately.
+
+### STEP 2 — TRIGGER AN EMERGENCY SIMULATION
+1. Locate the **Emergency Simulation** trigger panel on the left sidebar.
+2. Click any of the emergency triggers: **Traffic Accident**, **Fire Outbreak**, **Medical Emergency**, or **Hospital Power Failure**.
+3. Confirm the newly created incident appears instantaneously on the interactive satellite map and broadcasts live via Socket.io to the **Live Command Feed**.
+
+### STEP 3 — REVIEW AI BLUEPRINT SYNTHESIS
+1. Observe the **AI Decision Engine** panel analyzing the active emergency.
+2. Review the live LLM wall-clock latency (e.g. `4.3s`), AI confidence scores, and multi-agent specialist priority rankings (`Fire Response Agent`, `Healthcare Agent`, `Sentinel Agent`).
+
+### STEP 4 — OPEN THE OPERATOR CONSOLE
+```text
+Operator Console URL:
+YOUR_OPERATOR_URL
+```
+1. Open the standalone **Operator Console** in a separate browser tab or mobile viewport (`YOUR_OPERATOR_URL` or `/operator`).
+2. Log in using `operator@vyraion.ai` / `Dispatch@2026`.
+3. Review the pending incident in Phase 3 (*Awaiting Operator Approval*).
+4. Click **Approve & Dispatch** to authorize emergency response units.
+
+### STEP 5 — MONITOR REAL-TIME DISPATCH & CHECKLIST
+1. Switch back to the EOC Dashboard or monitor directly in the Operator Console.
+2. Watch emergency response units (Ambulance, Fire Engine, Traffic Police) navigating live road routes from station to scene.
+3. Observe the **Incident Action Checklist** updating automatically as dispatched units reach the scene (*Units Arrived On Scene*, *Hospital Notified*).
+
+### STEP 6 — RESOLVE THE INCIDENT
+1. In the Incident Action Checklist panel or Operator Console, click **Resolve Incident**.
+2. Confirm the incident transitions to Phase 5 (*RESOLVED*) and is saved permanently to MongoDB Atlas.
+
+### STEP 7 — OPEN THE DATASET GENERATOR
+```text
+Dataset Generator URL:
+YOUR_DATASET_URL
+```
+1. Open the **Dataset Generator** page (`YOUR_DATASET_URL` or `/dataset`).
+2. Verify that total record counters reflect real-time records stored in MongoDB Atlas (`vyraion.incidents`).
+3. Use the search input to filter for your resolved incident.
+
+### STEP 8 — DOWNLOAD SINGLE INCIDENT REPORT
+1. Locate the resolved incident row or open its detail drawer modal.
+2. Click **Download Report** and select your preferred format: **PDF**, **CSV**, **HTML**, or **JSON**.
+3. Open the downloaded file and confirm it contains full incident identity, timestamps, dispatched units, AI priorities, and 6-stage checklist verification history.
+
+### STEP 9 — DEMONSTRATE ROLE-BASED DASHBOARDS
+1. Locate the **Role Switcher** dropdown in the top header (`View: Authority`, `View: Hospital`, `View: Investigator`, `View: Reviewer`, `View: Admin`, `View: Citizen User`).
+2. Switch to **Hospital** view to observe medical-scoped telemetry (`Viewing as: Hospital — Incidents involving medical/hospital response`).
+3. Switch to **Investigator** view to audit closed/resolved incidents (`Viewing as: Investigator — Resolved and rejected incidents only`).
 
 ---
 
