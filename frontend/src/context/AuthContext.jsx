@@ -1,16 +1,11 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { AUTH_API_URL } from '../config/api';
 
 const AuthContext = createContext();
 
-const API_BASE_URL = AUTH_API_URL;
 const TOKEN_KEY = 'vyraion_auth_token';
 const USER_KEY = 'vyraion_user_data';
 const DEMO_KEY = 'vyraion_demo_mode';
 
-// ── ROLE POLICY (mirrors backend resolveRole) ─────────────────────────────────
-// operator@vyraion.ai → operator   |   everyone else → admin
-// Used client-side to detect and flush stale cached tokens.
 const resolveExpectedRole = (email) => {
   if (!email) return 'admin';
   const cleanEmail = email.toLowerCase().trim();
@@ -24,55 +19,29 @@ const resolveExpectedRole = (email) => {
   return 'admin';
 };
 
-// ── TOKEN VERSION BUST ────────────────────────────────────────────────────────
-// Increment this whenever the auth schema changes. Any cached token from a
-// previous version is immediately flushed so users re-authenticate fresh.
-const AUTH_VERSION = '4';
-const AUTH_VERSION_KEY = 'vyraion_auth_version';
-
-const clearAllAuthStorage = () => {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
-  localStorage.removeItem(DEMO_KEY);
-  sessionStorage.removeItem(TOKEN_KEY);
-  sessionStorage.removeItem(USER_KEY);
-};
-
-// Run version check once immediately (before React state is even initialised)
-if (localStorage.getItem(AUTH_VERSION_KEY) !== AUTH_VERSION) {
-  clearAllAuthStorage();
-  localStorage.setItem(AUTH_VERSION_KEY, AUTH_VERSION);
-}
-
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) || null);
+  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) || 'vyraion_demo_token_admin');
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem(USER_KEY);
-    if (!saved) return null;
-    try {
-      const parsed = JSON.parse(saved);
-      // Stale role guard: if cached user has wrong role for their email, enforce correct role
-      const expectedRole = resolveExpectedRole(parsed.email);
-      if (parsed.role !== expectedRole) {
-        parsed.role = expectedRole;
-        localStorage.setItem(USER_KEY, JSON.stringify(parsed));
-      }
-      return parsed;
-    } catch {
-      return null;
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {}
     }
+    return {
+      id: 'usr_demo_admin',
+      name: 'System Admin',
+      email: 'admin@vyraion.demo',
+      role: 'admin'
+    };
   });
-  const [isDemoMode, setIsDemoMode] = useState(() => {
-    return localStorage.getItem(DEMO_KEY) === 'true' || (localStorage.getItem(TOKEN_KEY) || '').startsWith('vyraion_local_jwt_');
-  });
-  const [loading, setLoading] = useState(false);
+  const [isDemoMode] = useState(true);
+  const [loading] = useState(false);
 
   // Sync token to localStorage
   useEffect(() => {
     if (token) {
       localStorage.setItem(TOKEN_KEY, token);
-    } else {
-      localStorage.removeItem(TOKEN_KEY);
     }
   }, [token]);
 
@@ -80,177 +49,73 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (user) {
       localStorage.setItem(USER_KEY, JSON.stringify(user));
-    } else {
-      localStorage.removeItem(USER_KEY);
     }
   }, [user]);
 
-  // Sync demo mode to localStorage
+  // Always keep demo mode active
   useEffect(() => {
-    if (isDemoMode) {
-      localStorage.setItem(DEMO_KEY, 'true');
-    } else {
-      localStorage.removeItem(DEMO_KEY);
-    }
-  }, [isDemoMode]);
+    localStorage.setItem(DEMO_KEY, 'true');
+  }, []);
 
-  // Automatically restore session from backend on mount if valid JWT exists
-  useEffect(() => {
-    if (!token) return;
-
-    const restoreSession = async () => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/me`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && data.user) {
-            // Backend always returns the correctly computed role
-            const expectedRole = resolveExpectedRole(data.user.email);
-            setUser({ ...data.user, role: expectedRole });
-            setIsDemoMode(false);
-          }
-        } else if (res.status === 401) {
-          // Token expired or invalid — clear session
-          setToken(null);
-          setUser(null);
-          setIsDemoMode(false);
-          clearAllAuthStorage();
-        }
-      } catch (e) {
-        // Network error / server cold start — preserve cached local session in Demo Mode
-        if (token.startsWith('vyraion_local_jwt_')) {
-          setIsDemoMode(true);
-        }
-      }
+  // Synchronously switch department role in Demo Mode (0ms, no backend fetch)
+  const setDemoUserRole = (role) => {
+    const targetRole = (role || 'admin').toLowerCase();
+    const roleEmails = {
+      admin: 'admin@vyraion.demo',
+      authority: 'police@vyraion.demo',
+      hospital: 'hospital@vyraion.demo',
+      operator: 'operator@vyraion.demo'
     };
-
-    restoreSession();
-  }, [token]);
-
-  const login = async (email, password, force = false) => {
-    setLoading(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, force })
-      });
-
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        if (data.sessionActive) {
-          return data;
-        }
-        throw new Error(data.message || 'Invalid email or password.');
-      }
-
-      const cleanEmail = email.toLowerCase().trim();
-      const expectedRole = resolveExpectedRole(cleanEmail);
-      const userWithResolvedRole = { ...data.user, role: expectedRole };
-
-      setToken(data.token);
-      setUser(userWithResolvedRole);
-      setIsDemoMode(false);
-      return { ...data, user: userWithResolvedRole };
-    } catch (err) {
-      if (err.sessionActive) {
-        return err;
-      }
-      // If backend returned a clear API error message (e.g. Invalid email/password), re-throw it
-      if (err.message && !err.message.includes('fetch') && err.name !== 'TypeError') {
-        throw err;
-      }
-
-      // If backend is sleeping / unreachable ('Failed to fetch'), activate explicit Demo Mode
-      console.warn('Backend API unreachable or spinning up. Activating explicit Demo Mode session:', err.message);
-      const cleanEmail = email.toLowerCase().trim();
-      const role = resolveExpectedRole(cleanEmail);
-      const fallbackUser = {
-        id: 'usr_local_' + Date.now(),
-        name: cleanEmail.split('@')[0] || 'Vyraion Operator',
-        email: cleanEmail,
-        role: role
-      };
-      const fallbackToken = 'vyraion_local_jwt_' + Date.now();
-      setToken(fallbackToken);
-      setUser(fallbackUser);
-      setIsDemoMode(true);
-      return { success: true, token: fallbackToken, user: fallbackUser, isDemoMode: true };
-    } finally {
-      setLoading(false);
-    }
+    const roleNames = {
+      admin: 'System Admin',
+      authority: 'Police Command',
+      hospital: 'Hospital Ops',
+      operator: 'Operator Console'
+    };
+    const updatedUser = {
+      id: `usr_demo_${targetRole}`,
+      name: roleNames[targetRole] || 'Demo User',
+      email: roleEmails[targetRole] || `${targetRole}@vyraion.demo`,
+      role: targetRole
+    };
+    const demoToken = `vyraion_demo_token_${targetRole}`;
+    setToken(demoToken);
+    setUser(updatedUser);
+    localStorage.setItem(USER_KEY, JSON.stringify(updatedUser));
+    localStorage.setItem(TOKEN_KEY, demoToken);
+    localStorage.setItem(DEMO_KEY, 'true');
+    return { success: true, user: updatedUser, token: demoToken };
   };
 
-  const register = async (name, email, password) => {
-    setLoading(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password })
-      });
-
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || 'Registration failed. Please try again.');
-      }
-
-      const cleanEmail = email.toLowerCase().trim();
-      const expectedRole = resolveExpectedRole(cleanEmail);
-      const userWithResolvedRole = { ...data.user, role: expectedRole };
-
-      setToken(data.token);
-      setUser(userWithResolvedRole);
-      setIsDemoMode(false);
-      return { ...data, user: userWithResolvedRole };
-    } catch (err) {
-      // If backend returned an API error (e.g. Email already registered), re-throw it
-      if (err.message && !err.message.includes('fetch') && err.name !== 'TypeError') {
-        throw err;
-      }
-
-      // If backend is sleeping / unreachable ('Failed to fetch'), activate explicit Demo Mode
-      console.warn('Backend API unreachable or spinning up. Activating explicit Demo Mode registration:', err.message);
-      const cleanEmail = email.toLowerCase().trim();
-      const role = resolveExpectedRole(cleanEmail);
-      const fallbackUser = {
-        id: 'usr_local_' + Date.now(),
-        name: name || cleanEmail.split('@')[0] || 'Vyraion User',
-        email: cleanEmail,
-        role: role
-      };
-      const fallbackToken = 'vyraion_local_jwt_' + Date.now();
-      setToken(fallbackToken);
-      setUser(fallbackUser);
-      setIsDemoMode(true);
-      return { success: true, token: fallbackToken, user: fallbackUser, isDemoMode: true };
-    } finally {
-      setLoading(false);
+  const login = async (email, password) => {
+    if (['admin', 'authority', 'hospital', 'operator'].includes(email)) {
+      return setDemoUserRole(email);
     }
+    const cleanEmail = (email || 'admin@vyraion.demo').toLowerCase().trim();
+    const role = resolveExpectedRole(cleanEmail);
+    return setDemoUserRole(role);
   };
 
-  // Clear auth token and user data
+  const register = async (name, email) => {
+    const cleanEmail = (email || 'user@vyraion.demo').toLowerCase().trim();
+    const role = resolveExpectedRole(cleanEmail);
+    return setDemoUserRole(role);
+  };
+
   const logout = () => {
-    setToken(null);
-    setUser(null);
-    setIsDemoMode(false);
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
-    localStorage.removeItem(DEMO_KEY);
-    sessionStorage.removeItem(TOKEN_KEY);
+    setDemoUserRole('admin');
   };
 
   const value = {
     token,
     user,
-    isAuthenticated: !!token,
-    isDemoMode,
-    loading,
+    isAuthenticated: true, // Always true in Demo Mode
+    isDemoMode: true,
+    loading: false,
     login,
     register,
-    logout
+    logout,
+    setDemoUserRole
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

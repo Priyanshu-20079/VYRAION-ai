@@ -23,12 +23,12 @@ export default function App() {
       <ViewRoleProvider>
         <BrowserRouter>
           <Routes>
-            {/* Public SaaS Landing & Auth Pages */}
-            <Route path="/" element={<LandingPage />} />
+            {/* Public SaaS Landing & Department Selection Pages */}
+            <Route path="/" element={<LoginPage />} />
             <Route path="/landing" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
-            <Route path="/operator/login" element={<OperatorLoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/operator/login" element={<LoginPage />} />
+            <Route path="/register" element={<LoginPage />} />
 
             {/* Standalone Operator Terminal (Operator Role Only) */}
             <Route element={<ProtectedRoute allowedRole="operator" />}>

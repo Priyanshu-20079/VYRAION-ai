@@ -112,18 +112,18 @@ function Modal({ title, onClose, children, width = 'max-w-md' }) {
 ═══════════════════════════════════════════════════════════ */
 function LogoutConfirm({ onCancel, onConfirm }) {
   return (
-    <Modal title="Logout" onClose={onCancel} width="max-w-sm">
+    <Modal title="Switch Department" onClose={onCancel} width="max-w-sm">
       <div className="space-y-5">
-        <div className="flex items-center gap-3 p-4 rounded-2xl bg-[#EF4444]/10 border border-[#EF4444]/30">
-          <AlertTriangle className="w-5 h-5 text-[#EF4444] shrink-0" />
+        <div className="flex items-center gap-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30">
+          <Building2 className="w-5 h-5 text-amber-400 shrink-0" />
           <p className="text-sm text-slate-300 leading-relaxed">
-            Are you sure you want to logout from <strong className="text-white">Vyraion</strong>? Your active session will be terminated.
+            Return to the department selection menu to select another operational environment?
           </p>
         </div>
         <div className="flex gap-3 pt-1">
           <button onClick={onCancel} className="flex-1 py-2.5 rounded-xl font-bold text-sm bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 transition-colors cursor-pointer">Cancel</button>
-          <button onClick={onConfirm} className="flex-1 py-2.5 rounded-xl font-bold text-sm bg-[#EF4444] hover:bg-red-500 text-white shadow-lg shadow-[#EF4444]/30 flex items-center justify-center gap-2 cursor-pointer">
-            <LogOut className="w-4 h-4" /> Logout
+          <button onClick={onConfirm} className="flex-1 py-2.5 rounded-xl font-bold text-sm bg-amber-500 hover:bg-amber-400 text-slate-950 font-mono shadow-lg shadow-amber-500/30 flex items-center justify-center gap-2 cursor-pointer">
+            <Building2 className="w-4 h-4" /> Switch Department
           </button>
         </div>
       </div>
@@ -595,7 +595,7 @@ export default function Header() {
     { icon: HelpCircle, label: 'Help & Documentation', modal: 'help', color: '#94A3B8' },
     { icon: Info, label: 'About Vyraion', modal: 'about', color: '#94A3B8' },
     { divider: true },
-    { icon: LogOut, label: 'Logout', modal: 'logout', color: '#EF4444', danger: true },
+    { icon: Building2, label: 'Switch Department', modal: 'logout', color: '#F59E0B' },
   ];
 
   return (

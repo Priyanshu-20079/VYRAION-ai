@@ -5,32 +5,21 @@ import { useAuth } from '../context/AuthContext';
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { setDemoUserRole } = useAuth();
+  const { setViewRole } = useViewRole();
 
-  const [errorMessage, setErrorMessage] = useState('');
-  const [activeSubmitting, setActiveSubmitting] = useState(null);
+  const handleDepartmentSelect = (targetRole) => {
+    setViewRole(targetRole);
+    setDemoUserRole(targetRole);
 
-  const handleDepartmentSelect = async (email, password, defaultRole) => {
-    setErrorMessage('');
-    setActiveSubmitting(email);
-
-    try {
-      const res = await login(email, password);
-      const userRole = (res?.user?.role || defaultRole).toLowerCase();
-
-      if (userRole === 'authority') {
-        navigate('/authority', { replace: true });
-      } else if (userRole === 'hospital') {
-        navigate('/hospital', { replace: true });
-      } else if (userRole === 'operator') {
-        navigate('/operator', { replace: true });
-      } else {
-        navigate('/dashboard', { replace: true });
-      }
-    } catch (err) {
-      setErrorMessage(err.message || 'Failed to authenticate department demo account.');
-    } finally {
-      setActiveSubmitting(null);
+    if (targetRole === 'authority') {
+      navigate('/authority', { replace: true });
+    } else if (targetRole === 'hospital') {
+      navigate('/hospital', { replace: true });
+    } else if (targetRole === 'operator') {
+      navigate('/operator', { replace: true });
+    } else {
+      navigate('/dashboard', { replace: true });
     }
   };
 
@@ -104,21 +93,11 @@ export default function LoginPage() {
 
             <button
               type="button"
-              disabled={!!activeSubmitting}
-              onClick={() => handleDepartmentSelect('admin@vyraion.demo', 'demo123', 'admin')}
-              className="w-full py-3 px-4 rounded-xl font-bold font-mono text-xs bg-amber-500 hover:bg-amber-400 disabled:bg-amber-500/50 text-slate-950 transition-all duration-200 hover:shadow-lg hover:shadow-amber-500/25 active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
+              onClick={() => handleDepartmentSelect('admin')}
+              className="w-full py-3 px-4 rounded-xl font-bold font-mono text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 transition-all duration-200 hover:shadow-lg hover:shadow-amber-500/25 active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
             >
-              {activeSubmitting === 'admin@vyraion.demo' ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                  <span>Authenticating...</span>
-                </>
-              ) : (
-                <>
-                  <span>ENTER ADMIN CONSOLE</span>
-                  <ChevronRight className="w-4 h-4" />
-                </>
-              )}
+              <span>ENTER ADMIN CONSOLE</span>
+              <ChevronRight className="w-4 h-4" />
             </button>
           </div>
 
@@ -143,21 +122,11 @@ export default function LoginPage() {
 
             <button
               type="button"
-              disabled={!!activeSubmitting}
-              onClick={() => handleDepartmentSelect('police@vyraion.demo', 'demo123', 'authority')}
-              className="w-full py-3 px-4 rounded-xl font-bold font-mono text-xs bg-blue-500 hover:bg-blue-400 disabled:bg-blue-500/50 text-slate-950 transition-all duration-200 hover:shadow-lg hover:shadow-blue-500/25 active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
+              onClick={() => handleDepartmentSelect('authority')}
+              className="w-full py-3 px-4 rounded-xl font-bold font-mono text-xs bg-blue-500 hover:bg-blue-400 text-slate-950 transition-all duration-200 hover:shadow-lg hover:shadow-blue-500/25 active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
             >
-              {activeSubmitting === 'police@vyraion.demo' ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                  <span>Authenticating...</span>
-                </>
-              ) : (
-                <>
-                  <span>ENTER POLICE / FIRE</span>
-                  <ChevronRight className="w-4 h-4" />
-                </>
-              )}
+              <span>ENTER POLICE / FIRE</span>
+              <ChevronRight className="w-4 h-4" />
             </button>
           </div>
 
@@ -182,21 +151,11 @@ export default function LoginPage() {
 
             <button
               type="button"
-              disabled={!!activeSubmitting}
-              onClick={() => handleDepartmentSelect('hospital@vyraion.demo', 'demo123', 'hospital')}
-              className="w-full py-3 px-4 rounded-xl font-bold font-mono text-xs bg-emerald-500 hover:bg-emerald-400 disabled:bg-emerald-500/50 text-slate-950 transition-all duration-200 hover:shadow-lg hover:shadow-emerald-500/25 active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
+              onClick={() => handleDepartmentSelect('hospital')}
+              className="w-full py-3 px-4 rounded-xl font-bold font-mono text-xs bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all duration-200 hover:shadow-lg hover:shadow-emerald-500/25 active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
             >
-              {activeSubmitting === 'hospital@vyraion.demo' ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                  <span>Authenticating...</span>
-                </>
-              ) : (
-                <>
-                  <span>ENTER HOSPITAL</span>
-                  <ChevronRight className="w-4 h-4" />
-                </>
-              )}
+              <span>ENTER HOSPITAL</span>
+              <ChevronRight className="w-4 h-4" />
             </button>
           </div>
 
@@ -205,7 +164,7 @@ export default function LoginPage() {
         {/* Footer info notice */}
         <div className="text-center pt-4">
           <p className="text-[11px] text-slate-500 font-mono">
-            VYRAION OS Multi-Department Demonstration System • Authenticated via REST API
+            VYRAION OS Multi-Department Demonstration System • Zero Authentication Required
           </p>
         </div>
 

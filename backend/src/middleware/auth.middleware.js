@@ -22,33 +22,51 @@ export const protect = (req, res, next) => {
     token = req.headers.authorization.split(' ')[1];
   }
 
-  if (!token) {
-    logger.warn('[Auth Middleware] Access denied: Missing Authorization Bearer token.');
-    return res.status(401).json({
-      success: false,
-      message: 'Not authorized to access this route. Token missing.'
-    });
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, config.jwtSecret);
+      req.user = decoded;
+      if (req.user && req.user.email) {
+        req.user.role = resolveRole(req.user.email);
+      }
+      logger.info(`[Auth Middleware] JWT Validated for User: ${decoded.email} | role=${req.user.role}`);
+      return next();
+    } catch (err) {
+      if (process.env.DEMO_MODE === 'false') {
+        logger.warn(`[Auth Middleware] JWT Validation Failed: ${err.message}`);
+        return res.status(401).json({
+          success: false,
+          message: 'Token verification failed or expired. Please sign in again.'
+        });
+      }
+    }
   }
 
-  try {
-    const decoded = jwt.verify(token, config.jwtSecret);
-    req.user = decoded;
-    if (req.user && req.user.email) {
-      req.user.role = resolveRole(req.user.email);
-    }
-    logger.info(`[Auth Middleware] JWT Validated for User: ${decoded.email} | role=${req.user.role}`);
-    next();
-  } catch (err) {
-    logger.warn(`[Auth Middleware] JWT Validation Failed: ${err.message}`);
-    return res.status(401).json({
-      success: false,
-      message: 'Token verification failed or expired. Please sign in again.'
-    });
+  // Demo Mode Pass-Through
+  if (config.demoMode) {
+    const roleParam = (req.query.role || req.headers['x-demo-role'] || 'admin').toLowerCase();
+    req.user = {
+      id: 'usr_demo',
+      email: `${roleParam}@vyraion.demo`,
+      name: 'Vyraion Demo User',
+      role: roleParam
+    };
+    logger.info(`[Auth Middleware] Demo Mode pass-through active | role=${roleParam}`);
+    return next();
   }
+
+  logger.warn('[Auth Middleware] Access denied: Missing Authorization Bearer token.');
+  return res.status(401).json({
+    success: false,
+    message: 'Not authorized to access this route. Token missing.'
+  });
 };
 
 export const requireRole = (role) => {
   return (req, res, next) => {
+    if (config.demoMode) {
+      return next();
+    }
     const userRole = req.user?.email ? resolveRole(req.user.email) : (req.user?.role || null);
     const requiredRole = role ? role.toLowerCase() : '';
     if (!req.user || !userRole || userRole !== requiredRole) {
