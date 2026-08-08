@@ -188,7 +188,7 @@ export const createDynamicIncident = (type, activeQueue = []) => {
     else if (u.category === 'fire') station = responders.fire;
     else if (u.category === 'infrastructure') station = CITY_FACILITIES.find(f => f.category === 'infrastructure') || responders.police;
     const route = buildRoadNetworkRoute(station.lat, station.lng, dynLoc.lat, dynLoc.lng);
-    return { unitId: `unit_${type}_${idx}_${Date.now()}`, name: u.name, type: u.type, icon: u.icon, stationName: station.name, originLat: station.lat, originLng: station.lng, route };
+    return { unitId: `unit_${type}_${idx}_${Date.now()}`, name: u.name, type: u.type, icon: u.icon, category: u.category, stationName: station.name, originLat: station.lat, originLng: station.lng, route };
   });
 
   const primaryUnit = dispatchedUnits[0] || { icon: '🚑', name: 'Emergency Response' };

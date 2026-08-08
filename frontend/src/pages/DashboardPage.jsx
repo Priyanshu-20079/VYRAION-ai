@@ -60,6 +60,7 @@ export default function DashboardPage() {
   const [currentPhase, setCurrentPhase] = useState(0);
   const [aiStep, setAiStep] = useState(0);
   const [currentProgress, setCurrentProgress] = useState(0);
+  const [completedAgents, setCompletedAgents] = useState([]);
   const [sentinelConfidence, setSentinelConfidence] = useState(22);
   const [hoveredNode, setHoveredNode] = useState(null);
 
@@ -212,7 +213,7 @@ export default function DashboardPage() {
                   else if (u.category === 'fire') station = responders.fire;
                   else if (u.category === 'infrastructure') station = CITY_FACILITIES.find(f => f.category === 'infrastructure') || responders.police;
                   const route = buildRoadNetworkRoute(station.lat, station.lng, incLat, incLng);
-                  return { unitId: `unit_${masterKey}_${idx}_${Date.now()}`, name: u.name, type: u.type, icon: u.icon, stationName: station.name, originLat: station.lat, originLng: station.lng, route };
+                  return { unitId: `unit_${masterKey}_${idx}_${Date.now()}`, name: u.name, type: u.type, icon: u.icon, category: u.category, stationName: station.name, originLat: station.lat, originLng: station.lng, route };
                 });
               }
 
@@ -283,6 +284,7 @@ export default function DashboardPage() {
         setActiveQueue([]);
         setCurrentPhase(0);
         setAiStep(0);
+        setCompletedAgents([]);
         setDetectionStep(0);
         setApprovalStep(0);
         setCurrentProgress(0);
@@ -399,6 +401,7 @@ export default function DashboardPage() {
     setDetectionStep(0);
     setAiStep(1);
     setCurrentProgress(0);
+    setCompletedAgents([]);
 
     try {
       await fetch(`${INCIDENTS_API_URL}`, {
@@ -447,6 +450,7 @@ export default function DashboardPage() {
     setDetectionStep(0);
     setAiStep(1);
     setCurrentProgress(0);
+    setCompletedAgents([]);
 
     try {
       await fetch(`${INCIDENTS_API_URL}`, {
@@ -490,50 +494,77 @@ export default function DashboardPage() {
     return () => clearTimeout(timer);
   }, [currentPhase, detectionStep, latestIncidentDef]);
 
-  // ─── PHASE 2: AI AGENTS ANIMATION ─────────────────────────────────────────
+  // ─── PHASE 2: AI AGENTS ANIMATION (CONCURRENT) ────────────────────────────
   useEffect(() => {
-    if (currentPhase !== 2 || aiStep === 0 || aiStep > 7) return;
+    if (currentPhase !== 2) return;
 
-    let progressInterval;
-    const stepDuration = 650;
-    const increment = 100 / (stepDuration / 40);
+    const nodeNames = ['Pulse', 'Traffic', 'Healthcare', 'Weather', 'Infrastructure', 'Nova', 'Sentinel'];
+    const nodeTasks = [
+      'Scanned multi-incident telemetry',
+      'Analyzed congestion & rerouting options',
+      'Checked hospital capacity & ICU beds',
+      'Assessed weather conditions & risks',
+      'Verified infrastructure & utility status',
+      `Merging ${activeQueue.length} emergencies via LLM reasoning`,
+      'Validating unified safety score'
+    ];
 
-    progressInterval = setInterval(() => {
-      setCurrentProgress((prev) => {
-        if (prev >= 100) { clearInterval(progressInterval); return 100; }
-        return prev + increment;
-      });
-    }, 40);
+    if (aiStep === 1) {
+      if (completedAgents.length > 0) return; // Prevent re-triggering timers
+      
+      const specialistTimes = [600, 1200, 900, 800, 1100];
+      let finishedCount = 0;
+      
+      const timers = specialistTimes.map((time, index) => 
+        setTimeout(() => {
+          setCompletedAgents(prev => {
+            if (!prev.includes(index + 1)) {
+              addLog(`🤖 ${nodeNames[index]} Agent: ${nodeTasks[index]}`, 'success', 'ai');
+              return [...prev, index + 1];
+            }
+            return prev;
+          });
+          
+          finishedCount++;
+          if (finishedCount === 5) {
+            setTimeout(() => setAiStep(6), 200);
+          }
+        }, time)
+      );
 
-    const stepTimer = setTimeout(() => {
-      const nodeNames = ['Pulse', 'Traffic', 'Healthcare', 'Weather', 'Infrastructure', 'Nova', 'Sentinel'];
-      const nodeTasks = [
-        'Scanned multi-incident telemetry',
-        'Analyzed congestion & rerouting options',
-        'Checked hospital capacity & ICU beds',
-        'Assessed weather conditions & risks',
-        'Verified infrastructure & utility status',
-        `Merging ${activeQueue.length} emergencies via LLM reasoning`,
-        'Validating unified safety score'
-      ];
+      return () => timers.forEach(clearTimeout);
 
-      addLog(`🤖 ${nodeNames[aiStep - 1]} Agent: ${nodeTasks[aiStep - 1]}`, 'success', 'ai');
+    } else if (aiStep === 6 || aiStep === 7) {
+      let progressInterval;
+      const stepDuration = 650;
+      const increment = 100 / (stepDuration / 40);
 
-      if (aiStep < 7) {
-        setAiStep((prev) => prev + 1);
-        setCurrentProgress(0);
-      } else {
-        addLog(`⏱ Total AI Processing Time: 4.3 sec`, 'completed', 'ai');
-        setCurrentPhase(3);
-        setApprovalStep(0);
-      }
-    }, stepDuration);
+      setCurrentProgress(0);
+      progressInterval = setInterval(() => {
+        setCurrentProgress((prev) => {
+          if (prev >= 100) { clearInterval(progressInterval); return 100; }
+          return prev + increment;
+        });
+      }, 40);
 
-    return () => {
-      clearInterval(progressInterval);
-      clearTimeout(stepTimer);
-    };
-  }, [currentPhase, aiStep, activeQueue.length]);
+      const stepTimer = setTimeout(() => {
+        addLog(`🤖 ${nodeNames[aiStep - 1]} Agent: ${nodeTasks[aiStep - 1]}`, 'success', 'ai');
+        
+        if (aiStep === 6) {
+          setAiStep(7);
+        } else {
+          addLog(`⏱ Total AI Processing Time: 2.1 sec`, 'completed', 'ai');
+          setCurrentPhase(3);
+          setApprovalStep(0);
+        }
+      }, stepDuration);
+
+      return () => {
+        clearInterval(progressInterval);
+        clearTimeout(stepTimer);
+      };
+    }
+  }, [currentPhase, aiStep, activeQueue.length, completedAgents.length]);
 
   // ─── SENTINEL CONFIDENCE ──────────────────────────────────────────────────
   useEffect(() => {
@@ -643,6 +674,7 @@ export default function DashboardPage() {
   const resetCity = async () => {
     setCurrentPhase(0);
     setAiStep(0);
+    setCompletedAgents([]);
     setDetectionStep(0);
     setApprovalStep(0);
     setCurrentProgress(0);
@@ -677,7 +709,7 @@ export default function DashboardPage() {
 
   const allFieldUnits = [];
   activeQueue.forEach((inc) => {
-    const baseKey = inc.id && inc.id.includes('_') ? inc.id.split('_')[0] : inc.id;
+    const baseKey = (inc.id && inc.id.includes('_')) ? inc.id.split('_')[0] : (inc.type || inc.id || 'traffic');
     const def = masterIncidents[baseKey] || masterIncidents[inc.id];
     if (def && def.fieldResponse) {
       def.fieldResponse.forEach((fr) => {
@@ -906,8 +938,17 @@ export default function DashboardPage() {
             <div className="flex items-center gap-0 pt-2 overflow-x-auto pb-2 scrollbar-hide">
               {compactNodes.map((node, idx) => {
                 const NodeIcon = node.icon;
-                const isActive = currentPhase === 2 && aiStep === node.step;
-                const isCompleted = (currentPhase > 2) || (currentPhase === 2 && aiStep > node.step);
+                const isSpecialist = node.step <= 5;
+                const isActive = currentPhase === 2 && (
+                  (aiStep === 1 && isSpecialist && !completedAgents.includes(node.step)) ||
+                  (aiStep === 6 && node.step === 6) ||
+                  (aiStep === 7 && node.step === 7)
+                );
+                const isCompleted = (currentPhase > 2) || (currentPhase === 2 && (
+                  (isSpecialist && completedAgents.includes(node.step)) ||
+                  (node.step === 6 && aiStep > 6) ||
+                  (node.step === 7 && aiStep > 7)
+                ));
                 const isLast = idx === compactNodes.length - 1;
 
                 return (
@@ -920,10 +961,15 @@ export default function DashboardPage() {
                       }`}
                     >
                       <div className="w-14 bg-slate-950 h-1.5 rounded-full overflow-hidden mb-2 border border-slate-800">
-                        <div className={`h-full transition-all duration-100 rounded-full ${
+                        <div className={`h-full rounded-full ${
                           isCompleted ? 'bg-emerald-500' : 'bg-gradient-to-r from-[#1FA2FF] to-[#7C5CFF]'
                         }`}
-                          style={{ width: `${isCompleted ? 100 : isActive ? currentProgress : 0}%` }} />
+                          style={{ 
+                            width: `${isCompleted ? 100 : (isActive && isSpecialist) ? 100 : (isActive && !isSpecialist) ? currentProgress : 0}%`,
+                            transitionProperty: 'width, background-color',
+                            transitionDuration: (isActive && isSpecialist) ? node.aiTime : isCompleted ? '300ms' : '100ms',
+                            transitionTimingFunction: 'linear'
+                          }} />
                       </div>
 
                       <div
