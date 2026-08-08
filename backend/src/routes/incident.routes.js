@@ -4,10 +4,14 @@ import { incidentService } from '../services/incidentService.js';
 const router = express.Router();
 
 const applyServerRoleFilter = (incidents, role) => {
-  if (!role || role === 'all') return incidents;
+  if (!role || role === 'all' || role === 'admin') return incidents;
 
   if (role === 'operator') {
     return incidents.filter(i => i.status === 'AWAITING_APPROVAL' || i.status === 'APPROVED' || i.status === 'RESOLVED');
+  }
+
+  if (role === 'authority') {
+    return incidents.filter(i => i.severity === 'HIGH' || i.severity === 'CRITICAL' || i.status === 'AWAITING_APPROVAL' || i.status === 'APPROVED');
   }
 
   if (role === 'hospital') {
@@ -24,8 +28,16 @@ const applyServerRoleFilter = (incidents, role) => {
     });
   }
 
-  if (role === 'investigator' || role === 'reviewer') {
-    return incidents.filter(i => i.status === 'RESOLVED');
+  if (role === 'reviewer') {
+    return incidents.filter(i => i.status === 'AWAITING_APPROVAL' || i.status === 'APPROVED' || (i.priorities && i.priorities.length > 0));
+  }
+
+  if (role === 'investigator') {
+    return incidents.filter(i => i.status === 'RESOLVED' || i.status === 'REJECTED');
+  }
+
+  if (role === 'user') {
+    return incidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'REJECTED');
   }
 
   return incidents;

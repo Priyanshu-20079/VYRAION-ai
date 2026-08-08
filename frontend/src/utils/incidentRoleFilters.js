@@ -28,8 +28,12 @@ export function filterIncidentsForRole(incidents, viewRole) {
     });
   }
 
-  if (viewRole === 'investigator' || viewRole === 'reviewer') {
-    return incidents.filter(i => i.status === 'RESOLVED');
+  if (viewRole === 'reviewer') {
+    return incidents.filter(i => i.status === 'AWAITING_APPROVAL' || i.status === 'APPROVED' || (i.priorities && i.priorities.length > 0));
+  }
+
+  if (viewRole === 'investigator') {
+    return incidents.filter(i => i.status === 'RESOLVED' || i.status === 'REJECTED');
   }
 
   return incidents;

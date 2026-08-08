@@ -473,6 +473,22 @@ export default function DashboardPage() {
         })
       });
       if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.data) {
+          const createdDoc = {
+            ...dynamicInc,
+            ...data.data,
+            id: data.data.uniqueId || data.data.id || dynamicInc.uniqueId,
+            uniqueId: data.data.uniqueId || data.data.id || dynamicInc.uniqueId,
+            status: data.data.status || 'AWAITING_APPROVAL',
+            phase: data.data.phase || 3
+          };
+          setActiveQueue((prev) => {
+            const exists = prev.some((i) => (i.uniqueId || i.id) === createdDoc.uniqueId);
+            if (exists) return prev;
+            return [...prev, createdDoc];
+          });
+        }
         await fetchBackendIncidents();
       }
     } catch (e) {
