@@ -720,10 +720,11 @@ export default function DashboardPage() {
     });
   }, [activeQueue, liveVehicles, emitEventNotification]);
 
-  // ─── DISPATCH LIFECYCLE EVENTS (arrival, resolution) ───────────────────────
+  // ─── DISPATCH LIFECYCLE EVENTS (arrival, medical notification, resolution) ───
   useEffect(() => {
-    if (liveVehicles.length === 0) return;
+    if (liveVehicles.length === 0 || activeQueue.length === 0) return;
 
+    // Per-vehicle log & notification broadcasts
     liveVehicles.forEach((v) => {
       if (v.state === 'IDLE' || !v.incidentId) return;
 
@@ -744,36 +745,6 @@ export default function DashboardPage() {
           type: 'info',
           expiry: '15min'
         });
-
-        // Auto-set checklist.unitsArrived = true via API (first unit to arrive triggers this)
-        const arrivedChecklistKey = `${v.incidentId}_checklist_unitsArrived`;
-        if (!emittedStageEventsRef.current.has(arrivedChecklistKey)) {
-          emittedStageEventsRef.current.add(arrivedChecklistKey);
-          fetch(`${INCIDENTS_API_URL}/${v.incidentId}/checklist`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ unitsArrived: true }),
-          }).then(res => res.ok && res.json()).then(data => {
-            if (data?.data?.checklist) {
-              setActiveQueue(prev => prev.map(inc => {
-                const id = inc.uniqueId || inc.instanceId || inc.id;
-                if (id === v.incidentId || inc.id === v.incidentId) {
-                  return { ...inc, checklist: { ...inc.checklist, ...data.data.checklist } };
-                }
-                return inc;
-              }));
-            }
-          }).catch(() => {
-            // If API call fails, patch local state anyway for UX consistency
-            setActiveQueue(prev => prev.map(inc => {
-              const id = inc.uniqueId || inc.instanceId || inc.id;
-              if (id === v.incidentId || inc.id === v.incidentId) {
-                return { ...inc, checklist: { ...(inc.checklist || {}), unitsArrived: true } };
-              }
-              return inc;
-            }));
-          });
-        }
       }
 
       // Unit returning to base
@@ -783,7 +754,113 @@ export default function DashboardPage() {
         addLog(`🏠 ${v.name} returning to base`, 'green', 'dispatch');
       }
     });
-  }, [liveVehicles, emitEventNotification]);
+
+    // Per-incident multi-unit arrival & hospital/medical notification evaluation
+    activeQueue.forEach((inc) => {
+      const incId = inc.uniqueId || inc.instanceId || inc.id;
+      if (!incId) return;
+
+      // Find all live response units assigned to this specific incident
+      const incVehicles = liveVehicles.filter(
+        (v) => (v.incidentId === incId || v.assignedUnitId?.startsWith(incId)) && v.state !== 'IDLE'
+      );
+
+      if (incVehicles.length === 0) return;
+
+      // 1. HOSPITAL / MEDICAL NOTIFIED AUTOMATIC EVALUATION
+      // Hospital / Medical Notified represents that medical response coordination has actually occurred
+      // when an assigned medical/ambulance unit is confirmed actively responding/on-scene.
+      const hasMedicalUnit = incVehicles.some(
+        (v) =>
+          v.category === 'hospital' ||
+          String(v.icon || '').includes('🚑') ||
+          String(v.name || '').toLowerCase().includes('ambulance') ||
+          String(v.type || '').toLowerCase().includes('medical')
+      );
+
+      const isMedicalInc =
+        hasMedicalUnit ||
+        String(inc.type || inc.name || inc.id || '').toLowerCase().match(/medical|hospital|traffic|fire|hazmat|casualty/i);
+
+      if (isMedicalInc && hasMedicalUnit) {
+        const medicalUnitOnScene = incVehicles.some(
+          (v) =>
+            (v.category === 'hospital' || String(v.icon || '').includes('🚑') || String(v.name || '').toLowerCase().includes('ambulance')) &&
+            (v.state === 'ON_SCENE' || v.state === 'RETURNING')
+        );
+
+        const hospitalNotifiedKey = `${incId}_checklist_hospitalNotified`;
+        if (medicalUnitOnScene && !inc.checklist?.hospitalNotified && !emittedStageEventsRef.current.has(hospitalNotifiedKey)) {
+          emittedStageEventsRef.current.add(hospitalNotifiedKey);
+          addLog(`🏥 Hospital & Emergency Medical System notified for ${inc.name || inc.type}`, 'green', 'dispatch');
+
+          fetch(`${INCIDENTS_API_URL}/${incId}/checklist`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ hospitalNotified: true })
+          })
+            .then((res) => res.ok && res.json())
+            .then((data) => {
+              if (data?.data?.checklist) {
+                setActiveQueue((prev) =>
+                  prev.map((item) => {
+                    const id = item.uniqueId || item.instanceId || item.id;
+                    if (id === incId) return { ...item, checklist: { ...item.checklist, ...data.data.checklist } };
+                    return item;
+                  })
+                );
+              }
+            })
+            .catch(() => {
+              setActiveQueue((prev) =>
+                prev.map((item) => {
+                  const id = item.uniqueId || item.instanceId || item.id;
+                  if (id === incId) return { ...item, checklist: { ...(item.checklist || {}), hospitalNotified: true } };
+                  return item;
+                })
+              );
+            });
+        }
+      }
+
+      // 2. UNITS ARRIVED ON SCENE AUTOMATIC EVALUATION
+      // unitsArrived becomes true ONLY after ALL required dispatched units reach ON_SCENE / ARRIVED state.
+      const allUnitsArrived = incVehicles.every((v) => v.state === 'ON_SCENE' || v.state === 'RETURNING');
+      const unitsArrivedKey = `${incId}_checklist_unitsArrived`;
+
+      if (allUnitsArrived && !inc.checklist?.unitsArrived && !emittedStageEventsRef.current.has(unitsArrivedKey)) {
+        emittedStageEventsRef.current.add(unitsArrivedKey);
+        addLog(`✅ All required response units arrived on scene — ${inc.name || inc.type}`, 'green', 'dispatch');
+
+        fetch(`${INCIDENTS_API_URL}/${incId}/checklist`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ unitsArrived: true })
+        })
+          .then((res) => res.ok && res.json())
+          .then((data) => {
+            if (data?.data?.checklist) {
+              setActiveQueue((prev) =>
+                prev.map((item) => {
+                  const id = item.uniqueId || item.instanceId || item.id;
+                  if (id === incId) return { ...item, checklist: { ...item.checklist, ...data.data.checklist } };
+                  return item;
+                })
+              );
+            }
+          })
+          .catch(() => {
+            setActiveQueue((prev) =>
+              prev.map((item) => {
+                const id = item.uniqueId || item.instanceId || item.id;
+                if (id === incId) return { ...item, checklist: { ...(item.checklist || {}), unitsArrived: true } };
+                return item;
+              })
+            );
+          });
+      }
+    });
+  }, [liveVehicles, activeQueue, emitEventNotification]);
 
 
   const resetCity = async () => {
