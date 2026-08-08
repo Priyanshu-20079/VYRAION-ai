@@ -47,6 +47,7 @@ app.use('/api/knowledge', knowledgeRoutes);
 app.use('/api/vision', visionRoutes);
 
 // Dataset Generator Backend REST API Endpoints
+app.use('/dataset', datasetRoutes);
 app.use('/api/dataset', datasetRoutes);
 
 // Global Error Handler

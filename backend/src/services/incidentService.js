@@ -309,10 +309,14 @@ class IncidentService {
 
     try {
       if (mongoose.connection.readyState === 1) {
-        await Incident.findOneAndUpdate({ id: uniqueId }, newInc, { upsert: true, new: true });
+        const savedDoc = await Incident.create(newInc);
+        if (savedDoc) {
+          newInc._id = savedDoc._id;
+          logger.info(`[IncidentService] Saved to MongoDB Atlas with _id: ${savedDoc._id}`);
+        }
       }
     } catch (e) {
-      logger.error(`[IncidentService DB Error] Failed to upsert triggered incident '${uniqueId}':`, e.message);
+      logger.error(`[IncidentService DB Error] Failed to insert triggered incident '${uniqueId}':`, e.stack || e.message);
     }
 
     logger.info(`[IncidentService] Dynamic Incident Created: '${uniqueId}' -> AWAITING_APPROVAL (Phase 3)`);

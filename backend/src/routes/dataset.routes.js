@@ -1,7 +1,6 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import Incident from '../models/Incident.js';
-import { incidentService } from '../services/incidentService.js';
 import { logger } from '../utils/logger.js';
 
 const router = express.Router();
@@ -15,9 +14,6 @@ router.get(['/', '/incidents'], async (req, res, next) => {
         message: 'Database disconnected: Cannot generate dataset. MongoDB Atlas connection is required.'
       });
     }
-
-    // Auto-seed if empty
-    await incidentService.ensureSeedIncidents();
 
     // Query real MongoDB Atlas documents from vyraion.incidents
     const rawIncidents = await Incident.find().sort({ createdAt: -1 });
