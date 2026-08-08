@@ -131,7 +131,7 @@ router.post('/register', authLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Please provide name, email, and password.' });
     }
 
-    const emailRegex = /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/;
+    const emailRegex = /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,10})+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({ success: false, message: 'Please provide a valid email address.' });
     }
@@ -261,14 +261,36 @@ router.post('/login', authLimiter, async (req, res) => {
       if (!user) {
         const demoAccounts = ['admin@vyraion.demo', 'police@vyraion.demo', 'hospital@vyraion.demo', 'operator@vyraion.demo', 'reviewer@vyraion.demo', 'investigator@vyraion.demo', 'user@vyraion.demo'];
         if (demoAccounts.includes(cleanEmail)) {
-          logger.info(`[Auth Login] Auto-seeding demo user on first login: ${cleanEmail}`);
-          user = await User.create({
-            name: cleanEmail.split('@')[0],
-            email: cleanEmail,
-            username: cleanEmail.split('@')[0],
-            password: 'demo123',
-            role: assignedRole
-          });
+          // Use atomic upsert to avoid E11000 if migration seeding runs concurrently
+          try {
+            const hashedPw = await bcrypt.hash('demo123', 10);
+            user = await User.findOneAndUpdate(
+              { email: cleanEmail },
+              {
+                $setOnInsert: {
+                  name: cleanEmail.split('@')[0],
+                  email: cleanEmail,
+                  username: cleanEmail.split('@')[0],
+                  password: hashedPw,
+                  role: assignedRole
+                }
+              },
+              { upsert: true, new: true, select: '+password' }
+            );
+            if (!user) {
+              // Race: migration won, fetch the existing record
+              user = await User.findOne({ email: cleanEmail }).select('+password');
+            }
+            logger.info(`[Auth Login] Demo user ensured (upsert): ${cleanEmail}`);
+          } catch (upsertErr) {
+            if (upsertErr.code === 11000) {
+              // Another process created it first — fetch it
+              user = await User.findOne({ email: cleanEmail }).select('+password');
+              logger.info(`[Auth Login] Demo user already exists (E11000 race handled): ${cleanEmail}`);
+            } else {
+              throw upsertErr;
+            }
+          }
         } else {
           logger.warn(`[Auth Login FAILURE] User not found: ${cleanEmail}`);
           return res.status(401).json({ success: false, message: 'Invalid email or password.' });
