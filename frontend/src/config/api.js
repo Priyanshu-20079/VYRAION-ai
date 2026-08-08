@@ -22,3 +22,5 @@ export const NOVA_API_URL = `${API_BASE_URL}/api/nova`;
 export const KNOWLEDGE_API_URL = `${API_BASE_URL}/api/knowledge`;
 export const DATASET_API_URL = `${API_BASE_URL}/api/dataset`;
 export const AI_SERVICE_URL = import.meta.env.VITE_AI_SERVICE_URL || 'http://localhost:8000';
+
+export const getIncidentReportUrl = (id, format = 'pdf') => `${INCIDENTS_API_URL}/${id}/report?format=${format}`;

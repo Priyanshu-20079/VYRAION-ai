@@ -9,6 +9,7 @@ import {
   Server,
   FileSpreadsheet,
   FileJson,
+  FileText,
   Layers,
   Filter,
   Info,
@@ -16,7 +17,7 @@ import {
   AlertTriangle,
   Loader2
 } from 'lucide-react';
-import { DATASET_API_URL } from '../config/api';
+import { DATASET_API_URL, getIncidentReportUrl } from '../config/api';
 
 export default function DatasetPage() {
   const [datasetData, setDatasetData] = useState(null);
@@ -368,6 +369,7 @@ export default function DatasetPage() {
             <table className="w-full text-left text-xs font-mono border-collapse">
               <thead>
                 <tr className="bg-[#111827] text-slate-400 border-b border-white/10 uppercase tracking-wider text-[10px]">
+                  <th className="px-4 py-3 font-bold text-center text-[#33C8FF] whitespace-nowrap">Report Export</th>
                   <th className="px-4 py-3 font-bold text-[#33C8FF]">MongoDB ObjectId</th>
                   <th className="px-4 py-3 font-bold">Unique ID</th>
                   <th className="px-4 py-3 font-bold">Title</th>
@@ -398,6 +400,47 @@ export default function DatasetPage() {
                       onClick={() => setSelectedRecord(row)}
                       className="hover:bg-white/5 transition-colors cursor-pointer"
                     >
+                      <td className="px-4 py-3 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-center gap-1">
+                          <a
+                            href={getIncidentReportUrl(row._id || row.uniqueId || row.id, 'pdf')}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-2 py-1 rounded bg-[#33C8FF]/20 border border-[#33C8FF]/40 text-[#33C8FF] hover:bg-[#33C8FF]/30 text-[10px] font-bold font-mono inline-flex items-center gap-1 transition-colors"
+                            title="Download PDF Incident Resolution Report"
+                          >
+                            <FileText className="w-3 h-3" />
+                            <span>PDF</span>
+                          </a>
+                          <a
+                            href={getIncidentReportUrl(row._id || row.uniqueId || row.id, 'csv')}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-2 py-1 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30 text-[10px] font-bold font-mono inline-flex items-center gap-1 transition-colors"
+                            title="Download CSV Incident Report"
+                          >
+                            <span>CSV</span>
+                          </a>
+                          <a
+                            href={getIncidentReportUrl(row._id || row.uniqueId || row.id, 'html')}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-2 py-1 rounded bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 hover:bg-indigo-500/30 text-[10px] font-bold font-mono inline-flex items-center gap-1 transition-colors"
+                            title="Open HTML Printable Report"
+                          >
+                            <span>HTML</span>
+                          </a>
+                          <a
+                            href={getIncidentReportUrl(row._id || row.uniqueId || row.id, 'json')}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-2 py-1 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30 text-[10px] font-bold font-mono inline-flex items-center gap-1 transition-colors"
+                            title="View JSON Payload Report"
+                          >
+                            <span>JSON</span>
+                          </a>
+                        </div>
+                      </td>
                       <td className="px-4 py-3 font-bold text-[#33C8FF] whitespace-nowrap">
                         {row._id}
                       </td>
@@ -569,6 +612,60 @@ export default function DatasetPage() {
                   <div>Destination: <strong className="text-white">{selectedRecord.destination}</strong></div>
                   <div>Coordinates: <strong className="text-white font-mono">{selectedRecord.lat}, {selectedRecord.lng}</strong></div>
                   <div>Est. Resolution: <strong className="text-white">{selectedRecord.resolutionTime}</strong></div>
+                </div>
+              </div>
+
+              {/* Single Incident Report Export Box */}
+              <div className="p-4 rounded-xl bg-gradient-to-r from-[#33C8FF]/10 via-[#7C5CFF]/10 to-transparent border border-[#33C8FF]/30 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-[#33C8FF]" />
+                    <h4 className="font-bold text-white text-xs font-mono">Download Incident Resolution Report</h4>
+                  </div>
+                  <span className="text-[10px] font-mono text-[#33C8FF] bg-[#33C8FF]/10 px-2 py-0.5 rounded border border-[#33C8FF]/30">
+                    MongoDB Atlas Source
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300">
+                  Exports a project-specific resolution report for this exact incident ({selectedRecord.uniqueId || selectedRecord.id}), including captured fields, AI blueprints, action checklist, and resolution notes.
+                </p>
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <a
+                    href={getIncidentReportUrl(selectedRecord._id || selectedRecord.uniqueId || selectedRecord.id, 'pdf')}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3.5 py-1.5 rounded-lg bg-[#33C8FF]/20 border border-[#33C8FF]/40 text-[#33C8FF] hover:bg-[#33C8FF]/30 font-bold text-xs inline-flex items-center gap-1.5 transition-all shadow-md"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-[#33C8FF]" />
+                    <span>Download PDF</span>
+                  </a>
+                  <a
+                    href={getIncidentReportUrl(selectedRecord._id || selectedRecord.uniqueId || selectedRecord.id, 'csv')}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3.5 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30 font-bold text-xs inline-flex items-center gap-1.5 transition-all shadow-md"
+                  >
+                    <Download className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Download CSV</span>
+                  </a>
+                  <a
+                    href={getIncidentReportUrl(selectedRecord._id || selectedRecord.uniqueId || selectedRecord.id, 'html')}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3.5 py-1.5 rounded-lg bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 hover:bg-indigo-500/30 font-bold text-xs inline-flex items-center gap-1.5 transition-all shadow-md"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Open Printable HTML</span>
+                  </a>
+                  <a
+                    href={getIncidentReportUrl(selectedRecord._id || selectedRecord.uniqueId || selectedRecord.id, 'json')}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3.5 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30 font-bold text-xs inline-flex items-center gap-1.5 transition-all shadow-md"
+                  >
+                    <FileJson className="w-3.5 h-3.5 text-amber-400" />
+                    <span>View JSON</span>
+                  </a>
                 </div>
               </div>
 

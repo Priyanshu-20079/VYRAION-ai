@@ -1,5 +1,11 @@
 import express from 'express';
 import { incidentService } from '../services/incidentService.js';
+import {
+  generateJSONReport,
+  generateCSVReport,
+  generateHTMLReport,
+  generatePDFReportStream
+} from '../services/reportGenerator.js';
 
 const router = express.Router();
 
@@ -116,5 +122,43 @@ router.patch('/:id/checklist', async (req, res, next) => {
   }
 });
 
+// GET /api/incidents/:id/report - Download/generate single-incident report (pdf, csv, html, json)
+router.get('/:id/report', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const format = (req.query.format || 'pdf').toLowerCase();
+
+    const incident = await incidentService.getIncidentById(id);
+    if (!incident) {
+      return res.status(404).json({ success: false, message: `Incident '${id}' not found in MongoDB Atlas` });
+    }
+
+    if (format === 'json') {
+      const jsonReport = generateJSONReport(incident);
+      return res.json(jsonReport);
+    }
+
+    if (format === 'csv') {
+      const csvReport = generateCSVReport(incident);
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="incident-report-${incident.uniqueId || id}.csv"`);
+      return res.send(csvReport);
+    }
+
+    if (format === 'html') {
+      const htmlReport = generateHTMLReport(incident);
+      res.setHeader('Content-Type', 'text/html');
+      return res.send(htmlReport);
+    }
+
+    if (format === 'pdf') {
+      return generatePDFReportStream(incident, res);
+    }
+
+    return res.status(400).json({ success: false, message: `Unsupported format '${format}'. Supported: pdf, csv, html, json.` });
+  } catch (err) {
+    next(err);
+  }
+});
 
 export default router;
