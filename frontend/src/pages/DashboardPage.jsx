@@ -35,14 +35,15 @@ import { STATUS_COLORS } from '../utils/statusColors';
 import { useNotifications } from '../context/NotificationContext';
 import { useSocket } from '../context/SocketContext';
 import { useViewRole } from '../context/ViewRoleContext';
-import { filterIncidentsForRole, getFilterTabsForRole, applySubFilter } from '../utils/incidentRoleFilters';
+import { filterIncidentsForRole, getFilterTabsForRole, applySubFilter, ROLE_LABELS, ROLE_DESCRIPTIONS } from '../utils/incidentRoleFilters';
 
 export default function DashboardPage() {
   const { emitEventNotification } = useNotifications();
   const { socket, isConnected } = useSocket();
-  const { viewRole } = useViewRole();
+  const { viewRole, setIncidentCounts } = useViewRole();
   const emittedStageEventsRef = useRef(new Set());
   const [activeQueue, setActiveQueue] = useState([]);
+  const [allRawIncidents, setAllRawIncidents] = useState([]);
   const [novaBlueprint, setNovaBlueprint] = useState([]);
   const [aiError, setAiError] = useState(null);
   const [disableLiveAI, setDisableLiveAI] = useState(() => {
@@ -193,17 +194,22 @@ export default function DashboardPage() {
   // ─── BACKEND REAL-TIME WEBSOCKET STATE SYNC ENGINE ───────────────────────
   const fetchBackendIncidents = useCallback(async () => {
     try {
-      const endpoint = ['investigator'].includes(viewRole) 
-        ? `${INCIDENTS_API_URL}?role=${viewRole}` 
-        : `${INCIDENTS_API_URL}/active?role=${viewRole}`;
+      const endpoint = viewRole === 'investigator' 
+        ? `${INCIDENTS_API_URL}?role=all` 
+        : `${INCIDENTS_API_URL}/active?role=all`;
       const res = await fetch(endpoint);
       if (res.ok) {
         const result = await res.json();
         if (result.success && Array.isArray(result.data)) {
-          let backendQueue = result.data;
-          backendQueue = applySubFilter(backendQueue, viewRole, selectedTab);
+          const allRaw = result.data;
+          setAllRawIncidents(allRaw);
+
+          const roleScoped = filterIncidentsForRole(allRaw, viewRole);
+          setIncidentCounts({ visible: roleScoped.length, total: allRaw.length });
+
+          const tabScoped = applySubFilter(roleScoped, viewRole, selectedTab);
           
-          backendQueue = backendQueue.map((inc) => {
+          const backendQueue = tabScoped.map((inc) => {
             let masterKey = 'traffic';
             const rawId = String(inc.type || inc.name || inc.id || '').toLowerCase();
             if (rawId.includes('fire')) masterKey = 'fire';
@@ -263,7 +269,7 @@ export default function DashboardPage() {
           });
 
           if (backendQueue.length > 0) {
-            const maxPhase = Math.max(...result.data.map((inc) => inc.phase || 1));
+            const maxPhase = Math.max(...backendQueue.map((inc) => inc.phase || 1));
             setCurrentPhase(maxPhase);
           } else {
             setCurrentPhase(0);
@@ -273,7 +279,7 @@ export default function DashboardPage() {
     } catch (err) {
       // Offline fallback
     }
-  }, [viewRole, selectedTab]);
+  }, [viewRole, selectedTab, setIncidentCounts]);
 
   useEffect(() => {
     fetchBackendIncidents();
@@ -1092,20 +1098,43 @@ export default function DashboardPage() {
 
           {/* Role Filter Tabs */}
           <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide py-1">
-            {getFilterTabsForRole(viewRole).map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setSelectedTab(tab.id)}
-                className={`px-4 py-1.5 rounded-full border text-xs font-bold font-mono transition-all shrink-0 ${
-                  selectedTab === tab.id
-                    ? 'bg-[#33C8FF]/20 text-[#33C8FF] border-[#33C8FF]'
-                    : 'bg-slate-900/50 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-slate-300'
-                }`}
-              >
-                {tab.label} {selectedTab === tab.id && `(${activeQueue.length})`}
-              </button>
-            ))}
+            {getFilterTabsForRole(viewRole).map(tab => {
+              const tabCount = applySubFilter(filterIncidentsForRole(allRawIncidents, viewRole), viewRole, tab.id).length;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setSelectedTab(tab.id)}
+                  className={`px-4 py-1.5 rounded-full border text-xs font-bold font-mono transition-all shrink-0 ${
+                    selectedTab === tab.id
+                      ? 'bg-[#33C8FF]/20 text-[#33C8FF] border-[#33C8FF]'
+                      : 'bg-slate-900/50 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-slate-300'
+                  }`}
+                >
+                  {tab.label} ({tabCount})
+                </button>
+              );
+            })}
           </div>
+
+          {/* Role-Aware Filtered Empty State Banner */}
+          {activeQueue.length === 0 && allRawIncidents.length > 0 && (
+            <div className="glass-panel p-5 rounded-2xl border border-amber-500/30 bg-amber-500/10 flex items-center gap-4 animate-fade-in">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+                <ShieldAlert className="w-5 h-5" />
+              </div>
+              <div className="space-y-0.5">
+                <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                  No incidents currently visible to the {ROLE_LABELS[viewRole] || viewRole} view
+                </h4>
+                <p className="text-xs text-amber-300 font-mono">
+                  "{ROLE_DESCRIPTIONS[viewRole] || 'Scoped Incident Telemetry'}"
+                </p>
+                <p className="text-[11px] text-slate-400 font-mono">
+                  {allRawIncidents.length} active incident{allRawIncidents.length !== 1 ? 's are' : ' is'} present in the system, but scoped to other role permissions.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* AI Vision Camera Feed */}
           <div>

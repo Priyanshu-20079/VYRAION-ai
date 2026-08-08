@@ -4,6 +4,7 @@ import { useTheme, THEMES } from '../../context/ThemeContext';
 import { useNotifications } from '../../context/NotificationContext';
 import { useAuth } from '../../context/AuthContext';
 import { useViewRole } from '../../context/ViewRoleContext';
+import { ROLE_LABELS, ROLE_DESCRIPTIONS } from '../../utils/incidentRoleFilters';
 import {
   Search, Bell, Cpu, Database, Activity, Sparkles, Sun, Moon,
   ChevronDown, User, Shield, Palette, BellRing, ScrollText,
@@ -541,7 +542,7 @@ export default function Header() {
   const { themeId, theme } = useTheme();
   const { notifications, removeIncidentNotifications } = useNotifications();
   const { logout, user: authUser, isDemoMode } = useAuth();
-  const { viewRole, setViewRole } = useViewRole();
+  const { viewRole, setViewRole, incidentCounts } = useViewRole();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [activeModal, setActiveModal] = useState(null);
@@ -621,18 +622,27 @@ export default function Header() {
             <span>🟢 Administrator</span>
           </div>
 
-          <div className="hidden sm:inline-flex relative items-center">
-            <select
-              value={viewRole}
-              onChange={(e) => setViewRole(e.target.value)}
-              className="appearance-none outline-none cursor-pointer bg-[#33C8FF]/10 text-[#33C8FF] border border-[#33C8FF]/30 hover:bg-[#33C8FF]/20 px-3 py-1 pr-6 rounded-full text-xs font-semibold transition-colors"
-            >
-              <option value="authority">View: Authority</option>
-              <option value="hospital">View: Hospital</option>
-              <option value="investigator">View: Investigator</option>
-              <option value="reviewer">View: Reviewer</option>
-            </select>
-            <ChevronDown className="w-3 h-3 text-[#33C8FF] absolute right-2 pointer-events-none" />
+          <div className="hidden lg:flex flex-col items-end gap-0.5">
+            <div className="relative inline-flex items-center">
+              <select
+                value={viewRole}
+                onChange={(e) => setViewRole(e.target.value)}
+                className="appearance-none outline-none cursor-pointer bg-[#33C8FF]/10 text-[#33C8FF] border border-[#33C8FF]/30 hover:bg-[#33C8FF]/20 px-3 py-1 pr-6 rounded-full text-xs font-semibold transition-colors"
+              >
+                <option value="operator">View: Operator</option>
+                <option value="authority">View: Authority</option>
+                <option value="hospital">View: Hospital</option>
+                <option value="investigator">View: Investigator</option>
+                <option value="reviewer">View: Reviewer</option>
+                <option value="admin">View: Admin</option>
+                <option value="user">View: Citizen User</option>
+              </select>
+              <ChevronDown className="w-3 h-3 text-[#33C8FF] absolute right-2 pointer-events-none" />
+            </div>
+            <div className="text-[10px] font-mono text-[#33C8FF]/90 font-semibold truncate max-w-[320px]">
+              Viewing as: <strong className="text-white">{ROLE_LABELS[viewRole] || viewRole}</strong> — {ROLE_DESCRIPTIONS[viewRole] || 'Scoped Telemetry'}{' '}
+              <span className="text-slate-400">({incidentCounts?.visible ?? 0} of {incidentCounts?.total ?? 0} visible)</span>
+            </div>
           </div>
 
 

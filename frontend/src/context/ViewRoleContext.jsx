@@ -6,12 +6,14 @@ export function ViewRoleProvider({ children }) {
   const [viewRole, setViewRole] = useState(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('vyraion_view_role');
-      if (['authority', 'hospital', 'investigator', 'reviewer'].includes(stored)) {
+      if (['operator', 'authority', 'hospital', 'investigator', 'reviewer', 'admin', 'user'].includes(stored)) {
         return stored;
       }
     }
     return 'authority';
   });
+
+  const [incidentCounts, setIncidentCounts] = useState({ visible: 0, total: 0 });
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -20,7 +22,7 @@ export function ViewRoleProvider({ children }) {
   }, [viewRole]);
 
   return (
-    <ViewRoleContext.Provider value={{ viewRole, setViewRole }}>
+    <ViewRoleContext.Provider value={{ viewRole, setViewRole, incidentCounts, setIncidentCounts }}>
       {children}
     </ViewRoleContext.Provider>
   );

@@ -9,41 +9,102 @@ import {
 
 const router = express.Router();
 
-const applyServerRoleFilter = (incidents, role) => {
-  if (!role || role === 'all' || role === 'admin') return incidents;
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ROLE-AWARE INCIDENT FILTERING (BACKEND SOURCE OF TRUTH)
+ * MUST REMAIN IN SYNC WITH frontend/src/utils/incidentRoleFilters.js
+ *
+ * Supported Roles (7):
+ * 1. operator     : Incidents awaiting or under dispatch (AWAITING_APPROVAL, APPROVED, RESOLVED)
+ * 2. authority    : All incidents, sorted by severity
+ * 3. hospital     : Incidents involving medical/hospital response (category===hospital or type medical/hospital)
+ * 4. investigator : Resolved and rejected incidents only (RESOLVED, REJECTED)
+ * 5. reviewer     : Incidents with AI-generated response blueprints (AWAITING_APPROVAL, APPROVED, priorities)
+ * 6. admin        : Full unrestricted incident visibility (sorted by severity)
+ * 7. user         : Active, non-resolved incidents (excludes RESOLVED, REJECTED)
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
 
-  if (role === 'operator') {
-    return incidents.filter(i => i.status === 'AWAITING_APPROVAL' || i.status === 'APPROVED' || i.status === 'RESOLVED');
+export function isHospitalIncident(i) {
+  if (!i) return false;
+
+  const typeStr = String(i.type || i.name || i.id || '').toLowerCase();
+  const catStr = String(i.category || '').toLowerCase();
+
+  // 1. Incident defined type/category match
+  if (
+    typeStr.match(/medical|hospital|ambulance|injury|casualty|patient/) ||
+    catStr.match(/medical|hospital/)
+  ) {
+    return true;
   }
 
-  if (role === 'authority') {
-    return incidents.filter(i => i.severity === 'HIGH' || i.severity === 'CRITICAL' || i.status === 'AWAITING_APPROVAL' || i.status === 'APPROVED');
-  }
-
-  if (role === 'hospital') {
-    return incidents.filter(i => {
-      const typeStr = (i.type || '').toLowerCase();
-      const idStr = (i.id || '').toLowerCase();
-      if (typeStr.includes('medical') || typeStr.includes('hospital') || idStr.includes('medical') || idStr.includes('hospital')) {
-        return true;
-      }
-      if (Array.isArray(i.dispatchedUnits)) {
-        return i.dispatchedUnits.some(u => (u.category || '').toLowerCase() === 'hospital');
-      }
-      return false;
+  // 2. Dispatched units match
+  if (Array.isArray(i.dispatchedUnits)) {
+    return i.dispatchedUnits.some((u) => {
+      const uCat = String(u.category || '').toLowerCase();
+      const uType = String(u.type || '').toLowerCase();
+      const uName = String(u.name || '').toLowerCase();
+      const uIcon = String(u.icon || '');
+      return (
+        uCat === 'hospital' ||
+        uCat === 'medical' ||
+        uType.includes('ambulance') ||
+        uType.includes('medical') ||
+        uName.includes('ambulance') ||
+        uIcon.includes('🚑')
+      );
     });
   }
 
+  return false;
+}
+
+const applyServerRoleFilter = (incidents, role) => {
+  if (!incidents || !Array.isArray(incidents)) return [];
+  if (!role || role === 'all' || role === 'admin') {
+    const sevWeight = { CRITICAL: 3, HIGH: 2, ELEVATED: 1, LOW: 0 };
+    return [...incidents].sort((a, b) => {
+      const wa = sevWeight[a.severity] ?? -1;
+      const wb = sevWeight[b.severity] ?? -1;
+      return wb - wa;
+    });
+  }
+
+  if (role === 'operator') {
+    return incidents.filter(
+      (i) => i.status === 'AWAITING_APPROVAL' || i.status === 'APPROVED' || i.status === 'RESOLVED'
+    );
+  }
+
+  if (role === 'authority') {
+    const sevWeight = { CRITICAL: 3, HIGH: 2, ELEVATED: 1, LOW: 0 };
+    return [...incidents].sort((a, b) => {
+      const wa = sevWeight[a.severity] ?? -1;
+      const wb = sevWeight[b.severity] ?? -1;
+      return wb - wa;
+    });
+  }
+
+  if (role === 'hospital') {
+    return incidents.filter(isHospitalIncident);
+  }
+
   if (role === 'reviewer') {
-    return incidents.filter(i => i.status === 'AWAITING_APPROVAL' || i.status === 'APPROVED' || (i.priorities && i.priorities.length > 0));
+    return incidents.filter(
+      (i) =>
+        i.status === 'AWAITING_APPROVAL' ||
+        i.status === 'APPROVED' ||
+        (i.priorities && i.priorities.length > 0)
+    );
   }
 
   if (role === 'investigator') {
-    return incidents.filter(i => i.status === 'RESOLVED' || i.status === 'REJECTED');
+    return incidents.filter((i) => i.status === 'RESOLVED' || i.status === 'REJECTED');
   }
 
   if (role === 'user') {
-    return incidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'REJECTED');
+    return incidents.filter((i) => i.status !== 'RESOLVED' && i.status !== 'REJECTED');
   }
 
   return incidents;
