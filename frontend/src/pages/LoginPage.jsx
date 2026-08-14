@@ -2,11 +2,14 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Activity, ArrowLeft, Shield, Car, Hospital, ChevronRight, AlertCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useViewRole } from '../context/ViewRoleContext';
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const { setDemoUserRole } = useAuth();
   const { setViewRole } = useViewRole();
+  const [errorMessage, setErrorMessage] = useState('');
+
 
   const handleDepartmentSelect = (targetRole) => {
     setViewRole(targetRole);
