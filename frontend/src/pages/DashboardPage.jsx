@@ -927,37 +927,35 @@ export default function DashboardPage() {
   };
 
   const getDynamicResolution = () => {
-    if (activeQueue.length === 0) return null;
+    const activeIncidents = activeQueue.filter((i) => i.status !== 'RESOLVED' && i.status !== 'ARCHIVED');
+    if (activeIncidents.length === 0) return '--';
+
     const rangeMap = {
-      traffic:  [8,  10],
-      hospital: [18, 25],
-      rain:     [12, 18],
-      flood:    [20, 30],
-      fire:     [15, 20],
-      cyber:    [30, 60],
-      power:    [18, 25],
-      medical:  [6,  9],
-      hazmat:   [25, 35],
-      safety:   [10, 15]
+      traffic:  [8,  15],
+      medical:  [5,  10],
+      hospital: [5,  10],
+      fire:     [15, 30],
+      power:    [20, 45],
+      cyber:    [20, 45],
+      rain:     [30, 60],
+      flood:    [30, 60],
+      hazmat:   [45, 90],
+      safety:   [10, 20]
     };
 
     let maxMin = 0, maxMax = 0;
-    activeQueue.forEach((inc) => {
+    activeIncidents.forEach((inc) => {
       const baseKey = getBaseTypeKey(inc);
-      const r = rangeMap[baseKey];
-      if (r) {
-        if (r[0] > maxMin) maxMin = r[0];
-        if (r[1] > maxMax) maxMax = r[1];
-      }
+      const r = rangeMap[baseKey] || [10, 20];
+      if (r[0] > maxMin) maxMin = r[0];
+      if (r[1] > maxMax) maxMax = r[1];
     });
 
-    // Fallback if no rangeMap match at all
-    if (maxMin === 0 && maxMax === 0) {
-      maxMin = 8; maxMax = 15;
-    }
+    const overhead = (activeIncidents.length - 1) * 5;
+    const finalMin = maxMin + overhead;
+    const finalMax = maxMax + overhead;
 
-    const overhead = (activeQueue.length - 1) * 5;
-    return `${maxMin + overhead}–${maxMax + overhead} min`;
+    return `${finalMin}–${finalMax} min`;
   };
 
   const dynamicResolution = getDynamicResolution();
@@ -1289,23 +1287,39 @@ export default function DashboardPage() {
           </div>
 
           {/* Emergency Response Teams */}
-          {currentPhase >= 3 && (
-            <div className="glass-panel p-4 rounded-2xl border border-emerald-500/30 space-y-3 animate-fade-in">
-              <div className="flex items-center justify-between border-b border-white/10 pb-2">
-                <div className="flex items-center gap-2">
-                  <Truck className="w-4 h-4 text-emerald-400" />
-                  <h2 className="text-sm font-bold text-white">Emergency Response Units</h2>
-                </div>
-                <span className="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
-                  {liveVehicles.filter((v) => v.state !== 'IDLE').length} Active
-                </span>
+          <div className="glass-panel p-4 rounded-2xl border border-emerald-500/30 space-y-3 animate-fade-in">
+            <div className="flex items-center justify-between border-b border-white/10 pb-2">
+              <div className="flex items-center gap-2">
+                <Truck className="w-4 h-4 text-emerald-400" />
+                <h2 className="text-sm font-bold text-white">Emergency Response Units</h2>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {(() => {
-                  const activeVehicles = liveVehicles.filter((v) => v.state !== 'IDLE');
-                  if (activeVehicles.length === 0 && allFieldUnits.length === 0) {
-                    return <p className="col-span-full text-xs text-slate-500 text-center py-3">Awaiting response unit dispatch...</p>;
-                  }
+              <span className="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
+                {liveVehicles.filter((v) => v.state !== 'IDLE').length} Active
+              </span>
+            </div>
+            {activeQueue.filter((i) => i.status !== 'RESOLVED' && i.status !== 'ARCHIVED').length === 0 ? (
+              <div className="p-4 rounded-xl border border-slate-800 bg-slate-900/50 text-center space-y-1">
+                <p className="text-xs font-semibold text-slate-400">Awaiting response unit dispatch...</p>
+                <p className="text-[11px] font-mono text-slate-600">Estimated overall resolution time: <strong className="text-slate-400">--</strong></p>
+              </div>
+            ) : (
+              <div className="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs font-semibold text-emerald-400 flex items-center justify-between">
+                <span>
+                  {currentPhase === 3 ? 'Awaiting operator authorization...'
+                    : currentPhase === 4 ? 'Emergency units en route...'
+                    : currentPhase >= 5 ? 'Units on scene.'
+                    : 'Dispatch active'}
+                </span>
+                <span className="font-mono text-emerald-300 font-bold">{dynamicResolution}</span>
+              </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {(() => {
+                const activeVehicles = liveVehicles.filter((v) => v.state !== 'IDLE');
+                if (activeVehicles.length === 0 && allFieldUnits.length === 0) {
+                  return null;
+                }
+
                   if (activeVehicles.length > 0) {
                     return activeVehicles.map((v) => {
                       const color = STATUS_COLORS[v.state] || '#94A3B8';
@@ -1385,7 +1399,7 @@ export default function DashboardPage() {
                 Estimated overall resolution time: <strong className="text-emerald-400 font-mono">{dynamicResolution ?? '—'}</strong>
               </p>
             </div>
-          )}
+
 
           {/* Nova Decision Blueprint Card */}
           {currentPhase >= 3 && unifiedPriorities.length > 0 && (
